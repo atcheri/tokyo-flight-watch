@@ -1,0 +1,28 @@
+# Fournisseur de données : searchapi (SearchApi.io, clé SEARCHAPI_KEY) ou serpapi (SerpApi, clé SERPAPI_KEY)
+provider: searchapi
+
+# Aéroports de départ et d'arrivée (codes IATA)
+origins: [FRA, CGN, DUS]
+destinations: [HND, NRT]
+preferred_destination: HND
+
+# Fenêtre de départ (incluse) et durées de séjour en jours
+departure_from: 2027-03-22
+departure_to: 2027-04-15
+min_stay_days: 7
+max_stay_days: 17
+# Durées « cœur » vérifiées plus souvent
+core_stay_min_days: 10
+core_stay_max_days: 14
+
+adults: 1
+max_stops: 1
+
+# Règles « bonne offre » (EUR, aller-retour par personne)
+direct_star_alliance_max_price: 1300
+default_max_price: 900          # tout le reste (vols avec escale, directs hors Star Alliance)
+price_drop_percent: 15          # baisse vs plus bas déjà relevé pour la même combinaison
+narita_min_saving: 100          # NRT signalé seulement s'il est au moins X € moins cher que HND
+
+# Quota de recherches (adaptez à votre offre)
+searches_per_day: 8

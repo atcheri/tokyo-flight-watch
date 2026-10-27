@@ -1,0 +1,42 @@
+{
+  "search_metadata": { "google_flights_url": "https://www.google.com/travel/flights?test" },
+  "best_flights": [
+    {
+      "flights": [
+        { "departure_airport": { "id": "FRA" }, "arrival_airport": { "id": "HND" }, "airline": "Lufthansa", "flight_number": "LH 716" }
+      ],
+      "price": 1250
+    },
+    {
+      "flights": [
+        { "departure_airport": { "id": "DUS" }, "arrival_airport": { "id": "IST" }, "airline": "Turkish Airlines", "flight_number": "TK 1524" },
+        { "departure_airport": { "id": "IST" }, "arrival_airport": { "id": "HND" }, "airline": "Turkish Airlines", "flight_number": "TK 198" }
+      ],
+      "price": 1100
+    }
+  ],
+  "other_flights": [
+    {
+      "flights": [
+        { "departure_airport": { "id": "FRA" }, "arrival_airport": { "id": "NRT" }, "airline": "Japan Airlines", "flight_number": "JL 408" }
+      ],
+      "price": 1060
+    },
+    {
+      "flights": [
+        { "departure_airport": { "id": "CGN" }, "arrival_airport": { "id": "DXB" }, "airline": "Emirates", "flight_number": "EK 58" },
+        { "departure_airport": { "id": "DXB" }, "arrival_airport": { "id": "NRT" }, "airline": "Emirates", "flight_number": "EK 318" }
+      ],
+      "price": 850
+    },
+    {
+      "flights": [
+        { "departure_airport": { "id": "FRA" }, "arrival_airport": { "id": "PEK" }, "airline": "Air China", "flight_number": "CA 932" },
+        { "departure_airport": { "id": "PEK" }, "arrival_airport": { "id": "PVG" }, "airline": "Air China", "flight_number": "CA 1501" },
+        { "departure_airport": { "id": "PVG" }, "arrival_airport": { "id": "HND" }, "airline": "Air China", "flight_number": "CA 919" }
+      ],
+      "price": 600
+    }
+  ],
+  "price_insights": { "lowest_price": 600, "price_level": "low", "typical_price_range": [950, 1400] }
+}

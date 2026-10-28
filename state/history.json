@@ -54,6 +54,46 @@
       "last_checked": "2026-10-27",
       "min_price": 1309,
       "last_price": 1309
+    },
+    "2027-03-24_2027-04-04": {
+      "last_checked": "2026-10-28",
+      "min_price": 1248,
+      "last_price": 1248
+    },
+    "2027-03-24_2027-04-05": {
+      "last_checked": "2026-10-28",
+      "min_price": 1165,
+      "last_price": 1165
+    },
+    "2027-03-24_2027-04-06": {
+      "last_checked": "2026-10-28",
+      "min_price": 1117,
+      "last_price": 1117
+    },
+    "2027-03-24_2027-04-07": {
+      "last_checked": "2026-10-28",
+      "min_price": 1165,
+      "last_price": 1165
+    },
+    "2027-03-25_2027-04-04": {
+      "last_checked": "2026-10-28",
+      "min_price": 1248,
+      "last_price": 1248
+    },
+    "2027-03-25_2027-04-05": {
+      "last_checked": "2026-10-28",
+      "min_price": 1199,
+      "last_price": 1199
+    },
+    "2027-03-25_2027-04-06": {
+      "last_checked": "2026-10-28",
+      "min_price": 1199,
+      "last_price": 1199
+    },
+    "2027-03-25_2027-04-07": {
+      "last_checked": "2026-10-28",
+      "min_price": 1199,
+      "last_price": 1199
     }
   }
 }

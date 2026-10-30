@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -18,22 +19,23 @@ type Config struct {
 	Destinations         []string `yaml:"destinations"`
 	PreferredDestination string   `yaml:"preferred_destination"`
 
-	DepartureFrom   string `yaml:"departure_from"`
-	DepartureTo     string `yaml:"departure_to"`
-	MinStayDays     int    `yaml:"min_stay_days"`
-	MaxStayDays     int    `yaml:"max_stay_days"`
-	CoreStayMinDays int    `yaml:"core_stay_min_days"`
-	CoreStayMaxDays int    `yaml:"core_stay_max_days"`
+	DepartureFrom string `yaml:"departure_from"`
+	DepartureTo   string `yaml:"departure_to"`
+	MinStayDays   int    `yaml:"min_stay_days"`
+	MaxStayDays   int    `yaml:"max_stay_days"`
 
 	Adults   int `yaml:"adults"`
 	MaxStops int `yaml:"max_stops"`
 
-	DirectStarAllianceMaxPrice int `yaml:"direct_star_alliance_max_price"`
-	DefaultMaxPrice            int `yaml:"default_max_price"`
-	PriceDropPercent           int `yaml:"price_drop_percent"`
-	NaritaMinSaving            int `yaml:"narita_min_saving"`
+	DirectStarAllianceMaxPrice int  `yaml:"direct_star_alliance_max_price"`
+	DefaultMaxPrice            int  `yaml:"default_max_price"`
+	PriceDropPercent           int  `yaml:"price_drop_percent"`
+	NewLowMinPercent           int  `yaml:"new_low_min_percent"`
+	AlertOnGoogleLow           bool `yaml:"alert_on_google_low"`
+	NaritaMinSaving            int  `yaml:"narita_min_saving"`
 
-	SearchesPerDay int `yaml:"searches_per_day"`
+	MaxDetailSearches int    `yaml:"max_detail_searches"`
+	SummaryWeekday    string `yaml:"summary_weekday"` // e.g. "monday"; empty disables the weekly summary
 
 	departureFrom time.Time
 	departureTo   time.Time
@@ -74,15 +76,27 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid stay range %d-%d", c.MinStayDays, c.MaxStayDays)
 	case c.Adults <= 0:
 		return fmt.Errorf("adults must be positive")
-	case c.SearchesPerDay <= 0:
-		return fmt.Errorf("searches_per_day must be positive")
+	case c.MaxDetailSearches < 0:
+		return fmt.Errorf("max_detail_searches must not be negative")
+	}
+	if c.SummaryWeekday != "" {
+		if _, ok := weekdays[strings.ToLower(c.SummaryWeekday)]; !ok {
+			return fmt.Errorf("summary_weekday %q is not an English weekday name", c.SummaryWeekday)
+		}
 	}
 	return nil
 }
 
+var weekdays = map[string]time.Weekday{
+	"sunday": time.Sunday, "monday": time.Monday, "tuesday": time.Tuesday, "wednesday": time.Wednesday,
+	"thursday": time.Thursday, "friday": time.Friday, "saturday": time.Saturday,
+}
+
+// IsSummaryDay reports whether the weekly summary is due on day.
+func (c *Config) IsSummaryDay(day time.Time) bool {
+	wd, ok := weekdays[strings.ToLower(c.SummaryWeekday)]
+	return ok && day.Weekday() == wd
+}
+
 func (c *Config) DepartureFromDate() time.Time { return c.departureFrom }
 func (c *Config) DepartureToDate() time.Time   { return c.departureTo }
-
-func (c *Config) IsCoreStay(days int) bool {
-	return days >= c.CoreStayMinDays && days <= c.CoreStayMaxDays
-}

@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 6 * * *" # 06:00 UTC = 7h/8h à Paris
   workflow_dispatch:
+    inputs:
+      args:
+        description: "Options du programme, ex. -dry-run -summary"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -30,7 +35,8 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
           ALERT_TO: ${{ secrets.ALERT_TO }}
-        run: go run ./cmd/watch
+          ARGS: ${{ inputs.args }}
+        run: go run ./cmd/watch $ARGS
 
       - name: Commit price history
         if: always()

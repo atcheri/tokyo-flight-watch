@@ -62,6 +62,14 @@ func passes(cfg *config.Config) []pass {
 	return ps
 }
 
+// Today returns the calendar day of now in Paris, as a UTC midnight.
+func Today(now time.Time) time.Time {
+	if loc, err := time.LoadLocation("Europe/Paris"); err == nil {
+		now = now.In(loc)
+	}
+	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+}
+
 // ScanCost is the number of requests one check needs to price the date grid on today.
 func ScanCost(cfg *config.Config, today time.Time) int {
 	return len(schedule.Windows(cfg, today, flightapi.MaxCalendarCombos)) * len(passes(cfg))

@@ -69,7 +69,7 @@ func run(o options) error {
 	}
 
 	ctx := context.Background()
-	rep, err := engine.Run(ctx, cfg, history, flightapi.NewClient(apiKey), todayInParis(), o.Options)
+	rep, err := engine.Run(ctx, cfg, history, flightapi.NewClient(apiKey), engine.Today(time.Now()), o.Options)
 	if err != nil {
 		return err
 	}
@@ -155,14 +155,6 @@ func printTelegramChats() error {
 		fmt.Printf("TELEGRAM_CHAT_ID=%d  (%s)\n", c.ID, c.Title)
 	}
 	return nil
-}
-
-func todayInParis() time.Time {
-	now := time.Now()
-	if loc, err := time.LoadLocation("Europe/Paris"); err == nil {
-		now = now.In(loc)
-	}
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func smtpFromEnv() (notify.SMTPConfig, error) {

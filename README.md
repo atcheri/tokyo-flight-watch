@@ -1,5 +1,9 @@
 # tokyo-flight-watch
 
+Deux façons de l'utiliser :
+- **Bot Telegram partagé** (`cmd/bot`) : des personnes invitées créent leurs propres suivis depuis Telegram, avec leur propre clé SearchApi. Hébergé sur un VPS avec Docker / Coolify. Voir [Bot partagé](#bot-partagé).
+- **Tâche GitHub Actions** (`cmd/watch`) : un seul suivi décrit dans `config.yaml`, décrit ci-dessous.
+
 Surveille les prix aller-retour **FRA / CGN / DUS → Tokyo (HND, NRT)** pour un départ entre le 22 mars et le 15 avril 2027 (séjour de 7 à 17 jours), avec les données Google Flights de [SearchApi](https://www.searchapi.io). Envoie les bonnes affaires sur **Telegram**, avec un résumé périodique. L'e-mail par SMTP reste possible en secours.
 
 ## Fonctionnement d'un lancement
@@ -36,3 +40,31 @@ go run ./cmd/watch -force-notify       # envoie un message même sans offre, pou
 
 ## Quota
 Un lancement coûte 3 requêtes par catégorie (6 avec les vols directs), plus 1 par alerte, dans la limite de `max_requests_per_run`. L'offre gratuite de SearchApi donne 100 requêtes **au total**. Au-delà, il faut l'offre Developer (40 $/mois) ou des lancements plus espacés : modifiez le `cron` de `.github/workflows/watch.yml`, par exemple `0 6 */3 * *` pour un lancement tous les 3 jours. Le résumé indique les crédits restants.
+
+## Bot partagé
+
+Un service Go unique : il reçoit les messages Telegram (long polling, donc ni domaine ni port ouvert), vérifie chaque suivi à sa fréquence et stocke tout dans SQLite (`/data/bot.db`), avec une sauvegarde quotidienne gardée 7 jours dans `/data/backups`. Les clés SearchApi des utilisateurs sont chiffrées (AES-256-GCM).
+
+### Déploiement avec Coolify
+1. Créez un **nouveau bot** avec @BotFather (`/newbot`) et notez son token.
+2. Générez une clé de chiffrement : `openssl rand -base64 32`. **Conservez-la** : sans elle, les clés enregistrées sont illisibles.
+3. Dans Coolify : *New Resource* → ce dépôt GitHub (branche `main`) → build pack **Docker Compose** (`docker-compose.yml`).
+4. Variables d'environnement :
+   - `TELEGRAM_BOT_TOKEN` : le token du nouveau bot
+   - `BOT_SECRET_KEY` : la clé de l'étape 2
+   - `INVITE_CODE` : un code à partager avec vos proches
+   - `MAX_WATCHES` (optionnel) : nombre de suivis par personne, 5 par défaut
+5. Déployez. Les journaux doivent afficher `bot started`. Le volume `bot-data` conserve la base entre les déploiements.
+
+### Utilisation
+- Invitez quelqu'un : il ouvre le bot et envoie `/start VOTRE_CODE`.
+- `/cle` : il colle sa clé SearchApi. Le message est supprimé, la clé vérifiée et stockée chiffrée.
+- `/nouveau` : 9 questions (aéroports, dates fixes ou « dans 60-150 jours », durée, escales, prix cibles, vols directs d'une alliance, fréquence). Le coût en requêtes par mois est affiché avant confirmation.
+- `/liste`, `/verifier N`, `/bilan N`, `/pause N`, `/reprendre N`, `/supprimer N`, `/credits`, `/oublier`.
+
+Chaque vérification coûte 1 à 3 requêtes par catégorie selon la largeur de la période, plus 1 par alerte. Avec la clé gratuite (100 requêtes au total), choisissez une période courte et une fréquence de quelques jours.
+
+### En local
+```sh
+TELEGRAM_BOT_TOKEN=... BOT_SECRET_KEY=$(openssl rand -base64 32) INVITE_CODE=test DATA_DIR=./data go run ./cmd/bot
+```

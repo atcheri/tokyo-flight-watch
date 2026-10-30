@@ -48,23 +48,34 @@ type History struct {
 }
 
 func Load(path string) (*History, error) {
-	h := &History{}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		h.Alerts = map[string]*Alert{}
-		return h, nil
+		return Decode(nil)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read history: %w", err)
 	}
-	if err := json.Unmarshal(data, h); err != nil {
-		return nil, fmt.Errorf("parse history: %w", err)
+	return Decode(data)
+}
+
+// Decode parses a history saved as JSON; empty data gives an empty history.
+func Decode(data []byte) (*History, error) {
+	h := &History{}
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, h); err != nil {
+			return nil, fmt.Errorf("parse history: %w", err)
+		}
 	}
 	if h.Alerts == nil {
 		h.Alerts = map[string]*Alert{}
 	}
 	h.migrate()
 	return h, nil
+}
+
+// Encode returns the history as compact JSON.
+func (h *History) Encode() ([]byte, error) {
+	return json.Marshal(h)
 }
 
 // migrate turns the old per-airport alert floors ("any:NRT": 756) into per-category alerts.

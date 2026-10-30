@@ -34,4 +34,4 @@ alert_expiry_runs: 3
 max_requests_per_run: 8
 min_credits_warning: 30         # avertit sur Telegram sous ce nombre de crédits
 
-summary_every_days: 7           # résumé périodique (0 = désactivé)
+summary_every_days: 6           # résumé périodique (0 = désactivé), multiple de la fréquence des lancements

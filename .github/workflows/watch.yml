@@ -2,7 +2,7 @@ name: Tokyo flight watch
 
 on:
   schedule:
-    - cron: "0 6 * * *" # 06:00 UTC = 7h/8h à Paris
+    - cron: "0 6 */3 * *" # tous les 3 jours vers 06:00 UTC, pour économiser les crédits gratuits
   workflow_dispatch:
     inputs:
       args:

@@ -196,14 +196,14 @@ func checkCandidate(ctx context.Context, client *flightapi.Client, cfg *config.C
 	if err != nil {
 		return nil, err
 	}
-	res := rules.Evaluate(cfg, resp, h.Peek(cand.Key), lowestBefore)
+	res := rules.Evaluate(cfg, resp, h.Peek(cand.Key), lowestBefore, h.AlertedBest)
 	level := ""
 	if resp.PriceInsights != nil {
 		level = resp.PriceInsights.PriceLevel
 	}
 	log.Printf("%s (%d j): calendar %d € %v → %d offres, min %d €, Google %q, %d alerte(s)",
 		cand.Key, combo.StayDays, cand.Price, cand.Reasons, len(res.Offers), res.MinPrice, level, len(res.Deals))
-	rules.Record(h.Get(cand.Key), res, cand.Price)
+	rules.Record(h, cand.Key, res, cand.Price)
 
 	rows := make([]notify.DealRow, 0, len(res.Deals))
 	for _, d := range res.Deals {

@@ -25,10 +25,6 @@ type Combo struct {
 	LastDetailPrice int `json:"last_detail_price,omitempty"`
 	// Alerted maps an offer signature to the price we last alerted for, to avoid repeat alerts.
 	Alerted map[string]int `json:"alerted,omitempty"`
-	// AlertedAny/AlertedDirect are the lowest prices alerted for this combo, so the calendar
-	// scan skips a detail search when the price hasn't gone below them.
-	AlertedAny    int `json:"alerted_any,omitempty"`
-	AlertedDirect int `json:"alerted_direct,omitempty"`
 }
 
 // Best is a price and the date pair it was found for.
@@ -49,9 +45,12 @@ type Day struct {
 type History struct {
 	Combos map[string]*Combo `json:"combos"`
 	// LowestEver is the cheapest any-airline price ever seen across all date pairs.
-	LowestEver  Best   `json:"lowest_ever"`
-	Days        []Day  `json:"days,omitempty"`
-	LastSummary string `json:"last_summary,omitempty"`
+	LowestEver Best `json:"lowest_ever"`
+	// AlertedBest is the lowest price alerted per category ("direct:HND", "any:NRT", …):
+	// a price-threshold alert only fires again when it beats it.
+	AlertedBest map[string]int `json:"alerted_best,omitempty"`
+	Days        []Day          `json:"days,omitempty"`
+	LastSummary string         `json:"last_summary,omitempty"`
 }
 
 func Load(path string) (*History, error) {

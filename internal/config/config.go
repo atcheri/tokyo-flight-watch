@@ -4,7 +4,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -13,11 +12,10 @@ import (
 const dateLayout = "2006-01-02"
 
 type Config struct {
-	Provider string `yaml:"provider"` // "searchapi" (default) or "serpapi"
-
 	Origins              []string `yaml:"origins"`
 	Destinations         []string `yaml:"destinations"`
 	PreferredDestination string   `yaml:"preferred_destination"`
+	NaritaMinSaving      int      `yaml:"narita_min_saving"` // other airports only if at least this much cheaper
 
 	DepartureFrom string `yaml:"departure_from"`
 	DepartureTo   string `yaml:"departure_to"`
@@ -26,16 +24,25 @@ type Config struct {
 
 	Adults   int `yaml:"adults"`
 	MaxStops int `yaml:"max_stops"`
+	// WatchDirect adds a scan restricted to nonstop flights of DirectAirlines on both legs.
+	WatchDirect    bool   `yaml:"watch_direct"`
+	DirectAirlines string `yaml:"direct_airlines"`
 
-	DirectStarAllianceMaxPrice int  `yaml:"direct_star_alliance_max_price"`
-	DefaultMaxPrice            int  `yaml:"default_max_price"`
-	PriceDropPercent           int  `yaml:"price_drop_percent"`
-	NewLowMinPercent           int  `yaml:"new_low_min_percent"`
-	AlertOnGoogleLow           bool `yaml:"alert_on_google_low"`
-	NaritaMinSaving            int  `yaml:"narita_min_saving"`
+	// An alert fires when the cheapest price of a category is under its target,
+	// or at least SensitivityPercent below the usual price.
+	TargetPrice        int `yaml:"target_price"`
+	TargetPriceDirect  int `yaml:"target_price_direct"`
+	SensitivityPercent int `yaml:"sensitivity_percent"`
+	TypicalWindowDays  int `yaml:"typical_window_days"`
+	// A new alert in the same category must beat the previous one by this much.
+	MinImprovementEUR     int `yaml:"min_improvement_eur"`
+	MinImprovementPercent int `yaml:"min_improvement_percent"`
+	// The previous alert is forgotten once its fare has been gone this many runs.
+	AlertExpiryRuns int `yaml:"alert_expiry_runs"`
 
-	MaxDetailSearches int    `yaml:"max_detail_searches"`
-	SummaryWeekday    string `yaml:"summary_weekday"` // e.g. "monday"; empty disables the weekly summary
+	MaxRequestsPerRun int `yaml:"max_requests_per_run"`
+	MinCreditsWarning int `yaml:"min_credits_warning"`
+	SummaryEveryDays  int `yaml:"summary_every_days"` // 0 disables the summary
 
 	departureFrom time.Time
 	departureTo   time.Time
@@ -46,7 +53,13 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
-	var c Config
+	c := Config{
+		Adults:            1,
+		DirectAirlines:    "STAR_ALLIANCE",
+		TypicalWindowDays: 14,
+		AlertExpiryRuns:   3,
+		MaxRequestsPerRun: 8,
+	}
 	if err := yaml.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
@@ -57,9 +70,6 @@ func Load(path string) (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	if c.Provider == "" {
-		c.Provider = "searchapi"
-	}
 	var err error
 	if c.departureFrom, err = time.Parse(dateLayout, c.DepartureFrom); err != nil {
 		return fmt.Errorf("departure_from: %w", err)
@@ -76,26 +86,14 @@ func (c *Config) validate() error {
 		return fmt.Errorf("invalid stay range %d-%d", c.MinStayDays, c.MaxStayDays)
 	case c.Adults <= 0:
 		return fmt.Errorf("adults must be positive")
-	case c.MaxDetailSearches < 0:
-		return fmt.Errorf("max_detail_searches must not be negative")
-	}
-	if c.SummaryWeekday != "" {
-		if _, ok := weekdays[strings.ToLower(c.SummaryWeekday)]; !ok {
-			return fmt.Errorf("summary_weekday %q is not an English weekday name", c.SummaryWeekday)
-		}
+	case c.TargetPrice <= 0 && c.TargetPriceDirect <= 0 && c.SensitivityPercent <= 0:
+		return fmt.Errorf("set at least one of target_price, target_price_direct or sensitivity_percent")
+	case c.TypicalWindowDays <= 0 || c.AlertExpiryRuns <= 0:
+		return fmt.Errorf("typical_window_days and alert_expiry_runs must be positive")
+	case c.MaxRequestsPerRun <= 0:
+		return fmt.Errorf("max_requests_per_run must be positive")
 	}
 	return nil
-}
-
-var weekdays = map[string]time.Weekday{
-	"sunday": time.Sunday, "monday": time.Monday, "tuesday": time.Tuesday, "wednesday": time.Wednesday,
-	"thursday": time.Thursday, "friday": time.Friday, "saturday": time.Saturday,
-}
-
-// IsSummaryDay reports whether the weekly summary is due on day.
-func (c *Config) IsSummaryDay(day time.Time) bool {
-	wd, ok := weekdays[strings.ToLower(c.SummaryWeekday)]
-	return ok && day.Weekday() == wd
 }
 
 func (c *Config) DepartureFromDate() time.Time { return c.departureFrom }

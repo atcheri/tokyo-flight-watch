@@ -1,4 +1,4 @@
-// Package flightapi queries a Google Flights scraping API (SearchApi.io or SerpApi).
+// Package flightapi queries Google Flights data through SearchApi.io.
 package flightapi
 
 import (
@@ -13,51 +13,42 @@ import (
 	"time"
 )
 
-type Provider string
+// KeyEnv is the environment variable holding the SearchApi key.
+const KeyEnv = "SEARCHAPI_KEY"
 
-const (
-	SearchAPI Provider = "searchapi" // https://www.searchapi.io
-	SerpAPI   Provider = "serpapi"   // https://serpapi.com
-)
-
-// KeyEnv is the environment variable holding the API key for each provider.
-var KeyEnv = map[Provider]string{
-	SearchAPI: "SEARCHAPI_KEY",
-	SerpAPI:   "SERPAPI_KEY",
-}
+const baseURL = "https://www.searchapi.io/api/v1"
 
 type Client struct {
-	Provider Provider
 	APIKey   string
 	HTTP     *http.Client
-	Requests int // API requests sent, for quota tracking
+	Requests int // billable search requests sent, for quota tracking
 }
 
-func NewClient(provider Provider, apiKey string) (*Client, error) {
-	if _, ok := KeyEnv[provider]; !ok {
-		return nil, fmt.Errorf("unknown provider %q (want %q or %q)", provider, SearchAPI, SerpAPI)
-	}
-	return &Client{Provider: provider, APIKey: apiKey, HTTP: &http.Client{Timeout: 90 * time.Second}}, nil
+func NewClient(apiKey string) *Client {
+	return &Client{APIKey: apiKey, HTTP: &http.Client{Timeout: 90 * time.Second}}
+}
+
+// Filters narrows the flights of both legs.
+type Filters struct {
+	Origins          []string
+	Destinations     []string
+	Adults           int
+	MaxStops         int    // 0 nonstop, 1 one stop or fewer, 2 two stops or fewer
+	IncludedAirlines string // e.g. "STAR_ALLIANCE"; empty for all airlines
 }
 
 type Query struct {
-	Origins      []string
-	Destinations []string
+	Filters
 	OutboundDate string
 	ReturnDate   string
-	Adults       int
-	MaxStops     int
 }
 
-// Response holds the parts of the Google Flights result we use. Both providers share this shape.
+// Response holds the parts of the Google Flights result we use.
 type Response struct {
-	BestFlights    []Itinerary    `json:"best_flights"`
-	OtherFlights   []Itinerary    `json:"other_flights"`
-	PriceInsights  *PriceInsights `json:"price_insights"`
-	SearchMetadata struct {
-		GoogleFlightsURL string `json:"google_flights_url"` // SerpApi only
-	} `json:"search_metadata"`
-	Error string `json:"error"`
+	BestFlights   []Itinerary    `json:"best_flights"`
+	OtherFlights  []Itinerary    `json:"other_flights"`
+	PriceInsights *PriceInsights `json:"price_insights"`
+	Error         string         `json:"error"`
 }
 
 // Itinerary is a round-trip offer. For round trips Google Flights lists only the outbound
@@ -85,7 +76,7 @@ type PriceInsights struct {
 	TypicalPriceRange PriceRange `json:"typical_price_range"`
 }
 
-// PriceRange decodes both SerpApi's [low, high] and SearchApi's {"low_price", "high_price"}.
+// PriceRange decodes both [low, high] and {"low_price", "high_price"}.
 type PriceRange struct {
 	Low, High int
 }
@@ -109,65 +100,26 @@ func (p *PriceRange) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// AirlineCode returns the IATA prefix of the flight number ("LH 716" -> "LH").
-func (s Segment) AirlineCode() string {
-	code, _, _ := strings.Cut(strings.TrimSpace(s.FlightNumber), " ")
-	return strings.ToUpper(code)
-}
-
 func (r *Response) Itineraries() []Itinerary {
 	return append(append([]Itinerary{}, r.BestFlights...), r.OtherFlights...)
-}
-
-// GoogleFlightsURL returns a link to the same search on Google Flights.
-func (r *Response) GoogleFlightsURL(q Query) string {
-	if r.SearchMetadata.GoogleFlightsURL != "" {
-		return r.SearchMetadata.GoogleFlightsURL
-	}
-	return SearchURL(q)
 }
 
 // SearchURL builds a Google Flights link for the query.
 func SearchURL(q Query) string {
 	text := fmt.Sprintf("Flights from %s to %s on %s through %s",
 		strings.Join(q.Origins, ","), strings.Join(q.Destinations, ","), q.OutboundDate, q.ReturnDate)
+	if q.MaxStops == 0 {
+		text += " nonstop"
+	}
 	return "https://www.google.com/travel/flights?hl=fr&curr=EUR&q=" + url.QueryEscape(text)
 }
 
+// Search returns the offers for one outbound/return date pair.
 func (c *Client) Search(ctx context.Context, q Query) (*Response, error) {
-	var endpoint string
-	var params url.Values
-	switch c.Provider {
-	case SearchAPI:
-		endpoint = "https://www.searchapi.io/api/v1/search"
-		params = url.Values{
-			"flight_type":  {"round_trip"},
-			"travel_class": {"economy"},
-		}
-		if s := searchAPIStops(q.MaxStops); s != "" {
-			params.Set("stops", s)
-		}
-	case SerpAPI:
-		endpoint = "https://serpapi.com/search.json"
-		params = url.Values{
-			"type":         {"1"}, // round trip
-			"travel_class": {"1"}, // economy
-		}
-		// SerpApi stops: 0 any, 1 nonstop, 2 one stop or fewer, 3 two stops or fewer.
-		if q.MaxStops >= 0 && q.MaxStops <= 2 {
-			params.Set("stops", strconv.Itoa(q.MaxStops+1))
-		}
-	}
-	params.Set("engine", "google_flights")
-	params.Set("departure_id", strings.Join(q.Origins, ","))
-	params.Set("arrival_id", strings.Join(q.Destinations, ","))
+	params := q.Filters.params("google_flights")
 	params.Set("outbound_date", q.OutboundDate)
 	params.Set("return_date", q.ReturnDate)
-	params.Set("adults", strconv.Itoa(q.Adults))
-	params.Set("currency", "EUR")
-	params.Set("gl", "de")
-	params.Set("hl", "fr")
-	body, status, err := c.get(ctx, endpoint, params)
+	body, status, err := c.get(ctx, "/search", params, true)
 	if err != nil {
 		return nil, err
 	}
@@ -177,15 +129,11 @@ func (c *Client) Search(ctx context.Context, q Query) (*Response, error) {
 // CalendarQuery asks for round-trip prices over a grid of outbound × return dates.
 // The grid may hold at most MaxCalendarCombos date pairs.
 type CalendarQuery struct {
-	Origins          []string
-	Destinations     []string
-	OutboundStart    string
-	OutboundEnd      string
-	ReturnStart      string
-	ReturnEnd        string
-	Adults           int
-	MaxStops         int
-	IncludedAirlines string // e.g. "STAR_ALLIANCE"; empty for all airlines
+	Filters
+	OutboundStart string
+	OutboundEnd   string
+	ReturnStart   string
+	ReturnEnd     string
 }
 
 const MaxCalendarCombos = 200
@@ -197,62 +145,67 @@ type CalendarPrice struct {
 	HasNoFlights bool   `json:"has_no_flights"`
 }
 
-// Calendar returns the cheapest price for each date pair of the grid (SearchApi only).
+// Calendar returns the cheapest price for each date pair of the grid.
 func (c *Client) Calendar(ctx context.Context, q CalendarQuery) ([]CalendarPrice, error) {
-	if c.Provider != SearchAPI {
-		return nil, fmt.Errorf("the price calendar is only supported with provider %q", SearchAPI)
-	}
-	params := url.Values{
-		"engine":            {"google_flights_calendar"},
-		"flight_type":       {"round_trip"},
-		"travel_class":      {"economy"},
-		"departure_id":      {strings.Join(q.Origins, ",")},
-		"arrival_id":        {strings.Join(q.Destinations, ",")},
-		"outbound_date":     {q.OutboundStart},
-		"outbound_date_end": {q.OutboundEnd},
-		"return_date":       {q.ReturnStart},
-		"return_date_end":   {q.ReturnEnd},
-		"adults":            {strconv.Itoa(q.Adults)},
-		"currency":          {"EUR"},
-		"gl":                {"de"},
-		"hl":                {"fr"},
-	}
-	if s := searchAPIStops(q.MaxStops); s != "" {
-		params.Set("stops", s)
-	}
-	if q.IncludedAirlines != "" {
-		params.Set("included_airlines", q.IncludedAirlines)
-	}
-	body, status, err := c.get(ctx, "https://www.searchapi.io/api/v1/search", params)
+	params := q.Filters.params("google_flights_calendar")
+	params.Set("outbound_date", q.OutboundStart)
+	params.Set("outbound_date_end", q.OutboundEnd)
+	params.Set("return_date", q.ReturnStart)
+	params.Set("return_date_end", q.ReturnEnd)
+	body, status, err := c.get(ctx, "/search", params, true)
 	if err != nil {
 		return nil, err
 	}
 	return ParseCalendar(body, status)
 }
 
-func searchAPIStops(maxStops int) string {
-	if stops := []string{"nonstop", "one_stop_or_fewer", "two_stops_or_fewer"}; maxStops >= 0 && maxStops < len(stops) {
-		return stops[maxStops]
+// Credits returns the account's remaining search credits.
+func (c *Client) Credits(ctx context.Context) (int, error) {
+	body, status, err := c.get(ctx, "/me", url.Values{}, false)
+	if err != nil {
+		return 0, err
 	}
-	return ""
+	return ParseCredits(body, status)
 }
 
-func (c *Client) get(ctx context.Context, endpoint string, params url.Values) ([]byte, int, error) {
-	params.Set("api_key", c.APIKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+params.Encode(), nil)
-	if err != nil {
-		return nil, 0, fmt.Errorf("%s: invalid request", c.Provider) // the URL contains the API key
+func (f Filters) params(engine string) url.Values {
+	params := url.Values{
+		"engine":       {engine},
+		"flight_type":  {"round_trip"},
+		"travel_class": {"economy"},
+		"departure_id": {strings.Join(f.Origins, ",")},
+		"arrival_id":   {strings.Join(f.Destinations, ",")},
+		"adults":       {strconv.Itoa(f.Adults)},
+		"currency":     {"EUR"},
+		"gl":           {"de"},
+		"hl":           {"fr"},
 	}
-	c.Requests++
+	if stops := []string{"nonstop", "one_stop_or_fewer", "two_stops_or_fewer"}; f.MaxStops >= 0 && f.MaxStops < len(stops) {
+		params.Set("stops", stops[f.MaxStops])
+	}
+	if f.IncludedAirlines != "" {
+		params.Set("included_airlines", f.IncludedAirlines)
+	}
+	return params
+}
+
+func (c *Client) get(ctx context.Context, path string, params url.Values, billable bool) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path+"?"+params.Encode(), nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("searchapi: invalid request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	if billable {
+		c.Requests++
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		// Don't wrap: *url.Error would print the URL, which contains the API key.
-		return nil, 0, fmt.Errorf("%s request failed", c.Provider)
+		return nil, 0, fmt.Errorf("searchapi request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, 0, fmt.Errorf("read %s response: %w", c.Provider, err)
+		return nil, 0, fmt.Errorf("read searchapi response: %w", err)
 	}
 	return body, resp.StatusCode, nil
 }
@@ -286,6 +239,25 @@ func ParseCalendar(body []byte, status int) ([]CalendarPrice, error) {
 		}
 	}
 	return prices, nil
+}
+
+func ParseCredits(body []byte, status int) (int, error) {
+	var r struct {
+		Account struct {
+			RemainingCredits *int `json:"remaining_credits"`
+		} `json:"account"`
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return 0, fmt.Errorf("decode account (status %d): %w", status, err)
+	}
+	if err := checkError(r.Error, status); err != nil {
+		return 0, err
+	}
+	if r.Account.RemainingCredits == nil {
+		return 0, fmt.Errorf("account response has no remaining_credits")
+	}
+	return *r.Account.RemainingCredits, nil
 }
 
 func checkError(msg string, status int) error {

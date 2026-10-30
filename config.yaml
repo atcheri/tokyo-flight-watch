@@ -1,10 +1,8 @@
-# Fournisseur de données. Le calendrier de prix n'existe que chez searchapi (SearchApi.io, clé SEARCHAPI_KEY).
-provider: searchapi
-
 # Aéroports de départ et d'arrivée (codes IATA)
 origins: [FRA, CGN, DUS]
 destinations: [HND, NRT]
 preferred_destination: HND
+narita_min_saving: 100          # un autre aéroport n'est retenu que s'il est au moins X € moins cher
 
 # Fenêtre de départ (incluse) et durées de séjour en jours
 departure_from: 2027-03-22
@@ -14,18 +12,26 @@ max_stay_days: 17
 
 adults: 1
 max_stops: 1
+watch_direct: true              # surveille aussi les vols directs (aller ET retour) de direct_airlines
+direct_airlines: STAR_ALLIANCE
 
-# Règles « bonne offre » (EUR, aller-retour par personne). Une seule suffit pour alerter.
-direct_star_alliance_max_price: 1300  # vol direct Star Alliance (aller et retour)
-default_max_price: 1050               # toute autre offre avec au plus 1 escale
-price_drop_percent: 15                # baisse vs plus bas déjà relevé pour les mêmes dates
-new_low_min_percent: 2                # nouveau plus bas toutes dates confondues, d'au moins X %
-alert_on_google_low: true             # Google Flights juge le prix « bas »
-narita_min_saving: 100                # NRT signalé seulement s'il est au moins X € moins cher que HND
+# Alerte quand le prix le plus bas d'une catégorie est sous la cible,
+# OU au moins sensitivity_percent sous le meilleur prix habituel (médiane des meilleurs prix
+# des typical_window_days derniers jours ; il faut au moins 3 jours d'historique).
+target_price: 1050              # toutes compagnies, ≤ 1 escale (0 = pas de cible)
+target_price_direct: 1300       # vols directs Star Alliance (0 = pas de cible)
+sensitivity_percent: 10
+typical_window_days: 14
 
-# Requêtes API par lancement : le calendrier couvre toute la grille de dates en 3 requêtes,
-# fois 2 (toutes compagnies + direct Star Alliance), plus au plus N recherches détaillées.
-max_detail_searches: 2
+# Anti-répétition : une nouvelle alerte doit battre la précédente de max(30 €, 3 %).
+# L'alerte précédente est oubliée quand son tarif a disparu depuis 3 lancements.
+min_improvement_eur: 30
+min_improvement_percent: 3
+alert_expiry_runs: 3
 
-# Résumé hebdomadaire Telegram (jour en anglais, vide pour désactiver)
-summary_weekday: monday
+# Quota SearchApi : un lancement = 3 requêtes par catégorie (6 avec watch_direct),
+# plus une recherche détaillée par alerte.
+max_requests_per_run: 8
+min_credits_warning: 30         # avertit sur Telegram sous ce nombre de crédits
+
+summary_every_days: 7           # résumé périodique (0 = désactivé)

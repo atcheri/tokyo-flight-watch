@@ -402,7 +402,7 @@
     "2027-03-27_2027-04-05": {
       "last_checked": "2026-10-30",
       "min_price": 1134,
-      "last_price": 1134,
+      "last_price": 1139,
       "direct_min_price": 1139,
       "direct_last_price": 1139
     },
@@ -455,7 +455,7 @@
     "2027-03-27_2027-04-12": {
       "last_checked": "2026-10-30",
       "min_price": 1097,
-      "last_price": 1097,
+      "last_price": 1128,
       "direct_min_price": 1308,
       "direct_last_price": 1308
     },
@@ -1956,7 +1956,7 @@
         "key": "2027-03-27_2027-04-07",
         "price": 1086
       },
-      "requests": 8,
+      "requests": 16,
       "alerts": 4
     }
   ],

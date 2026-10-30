@@ -63,16 +63,39 @@ func TestWindowsCoverEveryComboWithinSizeLimit(t *testing.T) {
 
 func TestParseComboAndWanted(t *testing.T) {
 	cfg := loadConfig(t)
+	today := time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)
 	c, err := ParseCombo("2027-03-26", "2027-04-08")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.StayDays != 13 || c.Key() != "2027-03-26_2027-04-08" || !Wanted(cfg, c) {
-		t.Fatalf("unexpected combo %+v (wanted=%v)", c, Wanted(cfg, c))
+	if c.StayDays != 13 || c.Key() != "2027-03-26_2027-04-08" || !Wanted(cfg, c, today) {
+		t.Fatalf("unexpected combo %+v (wanted=%v)", c, Wanted(cfg, c, today))
 	}
 	short, _ := ParseCombo("2027-03-26", "2027-03-30")
 	early, _ := ParseCombo("2027-03-20", "2027-04-01")
-	if Wanted(cfg, short) || Wanted(cfg, early) {
+	if Wanted(cfg, short, today) || Wanted(cfg, early, today) {
 		t.Fatal("out-of-range combos must not be wanted")
+	}
+}
+
+func TestRelativeWindow(t *testing.T) {
+	cfg, err := config.Parse([]byte("origins: [FRA]\ndestinations: [HND]\ndeparture_in_days_min: 30\n" +
+		"departure_in_days_max: 49\nmin_stay_days: 10\nmax_stay_days: 14\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	today := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	combos := All(cfg, today)
+	if len(combos) != 20*5 || combos[0].OutboundDate() != "2026-12-01" || combos[len(combos)-1].OutboundDate() != "2026-12-20" {
+		t.Fatalf("got %d combos from %s to %s", len(combos), combos[0].OutboundDate(), combos[len(combos)-1].OutboundDate())
+	}
+	// 20 departure days with a 4-day stay span: n × (n + 4) ≤ 200 gives n = 12, so 2 windows.
+	if got := len(Windows(cfg, today, 200)); got != 2 {
+		t.Fatalf("got %d windows, want 2", got)
+	}
+	// The window moves with the run date.
+	later := today.AddDate(0, 0, 10)
+	if got := All(cfg, later)[0].OutboundDate(); got != "2026-12-11" {
+		t.Fatalf("first departure on %s = %s, want 2026-12-11", later.Format(dateLayout), got)
 	}
 }

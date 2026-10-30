@@ -25,8 +25,8 @@ func NewTelegram(token, chatID string) *Telegram {
 }
 
 // RenderTelegram formats deals as Telegram HTML messages, split to fit the size limit.
-func RenderTelegram(deals []DealRow) []string {
-	subject, _, _ := Render(deals)
+func RenderTelegram(name string, deals []DealRow) []string {
+	subject, _, _ := Render(name, deals)
 	header := "✈️ <b>" + html.EscapeString(subject) + "</b>"
 	if len(deals) == 0 {
 		return []string{header + "\nAucune offre ne correspond aux critères (message de test)."}

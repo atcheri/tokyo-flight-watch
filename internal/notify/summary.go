@@ -15,8 +15,11 @@ type PriceRow struct {
 }
 
 type Summary struct {
+	Name        string
 	Date        string
 	DatePairs   int        // date pairs priced today
+	AnyTitle    string     // e.g. "Moins chers (≤ 1 escale)"
+	DirectTitle string     // e.g. "Vol direct Star Alliance"
 	Cheapest    []PriceRow // cheapest pairs, at most max_stops
 	BestDirect  *PriceRow  // cheapest direct pair, if watched and found
 	UsualAny    int        // usual best prices, 0 if not enough history
@@ -33,11 +36,11 @@ type Summary struct {
 // RenderSummary formats the periodic summary as one Telegram HTML message.
 func RenderSummary(s Summary) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "📊 <b>Résumé vols Tokyo</b> (%s)\n", s.Date)
+	fmt.Fprintf(&b, "📊 <b>Résumé %s</b> (%s)\n", html.EscapeString(s.Name), s.Date)
 	fmt.Fprintf(&b, "%d combinaisons de dates suivies à chaque lancement.\n", s.DatePairs)
 
 	if len(s.Cheapest) > 0 {
-		fmt.Fprintf(&b, "\n<b>Moins chers (≤ 1 escale)</b>%s\n", trend(s.Cheapest[0].Price, s.WeekAgoAny))
+		fmt.Fprintf(&b, "\n<b>%s</b>%s\n", html.EscapeString(s.AnyTitle), trend(s.Cheapest[0].Price, s.WeekAgoAny))
 		for _, r := range s.Cheapest {
 			fmt.Fprintf(&b, "• %s\n", row(r))
 		}
@@ -49,7 +52,7 @@ func RenderSummary(s Summary) string {
 	}
 
 	if s.BestDirect != nil {
-		fmt.Fprintf(&b, "\n<b>Direct Star Alliance</b>%s\n• %s\n", trend(s.BestDirect.Price, s.WeekAgoDir), row(*s.BestDirect))
+		fmt.Fprintf(&b, "\n<b>%s</b>%s\n• %s\n", html.EscapeString(s.DirectTitle), trend(s.BestDirect.Price, s.WeekAgoDir), row(*s.BestDirect))
 		if s.UsualDir > 0 {
 			fmt.Fprintf(&b, "Meilleur prix habituel : %d €\n", s.UsualDir)
 		}

@@ -19,13 +19,14 @@ const KeyEnv = "SEARCHAPI_KEY"
 const baseURL = "https://www.searchapi.io/api/v1"
 
 type Client struct {
+	BaseURL  string // SearchApi base URL, overridable in tests
 	APIKey   string
 	HTTP     *http.Client
 	Requests int // billable search requests sent, for quota tracking
 }
 
 func NewClient(apiKey string) *Client {
-	return &Client{APIKey: apiKey, HTTP: &http.Client{Timeout: 90 * time.Second}}
+	return &Client{BaseURL: baseURL, APIKey: apiKey, HTTP: &http.Client{Timeout: 90 * time.Second}}
 }
 
 // Filters narrows the flights of both legs.
@@ -190,7 +191,7 @@ func (f Filters) params(engine string) url.Values {
 }
 
 func (c *Client) get(ctx context.Context, path string, params url.Values, billable bool) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+path+"?"+params.Encode(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+path+"?"+params.Encode(), nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("searchapi: invalid request: %w", err)
 	}

@@ -7,6 +7,8 @@ import (
 
 func TestRenderSummary(t *testing.T) {
 	msg := RenderSummary(Summary{
+		Name:      "Vols Tokyo",
+		AnyTitle:  "Moins chers (≤ 1 escale)",
 		Date:      "2026-11-02",
 		DatePairs: 275,
 		Cheapest: []PriceRow{

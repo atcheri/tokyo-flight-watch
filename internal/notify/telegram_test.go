@@ -12,7 +12,7 @@ func TestRenderTelegram(t *testing.T) {
 		Reasons: "direct Star Alliance ≤ 1300 €", Typical: "950–1400 €",
 		URL: "https://www.google.com/travel/flights?a=1&b=2",
 	}
-	msgs := RenderTelegram([]DealRow{deal})
+	msgs := RenderTelegram("Vols Tokyo", []DealRow{deal})
 	if len(msgs) != 1 {
 		t.Fatalf("got %d messages, want 1", len(msgs))
 	}
@@ -26,7 +26,7 @@ func TestRenderTelegram(t *testing.T) {
 	for i := range many {
 		many[i] = deal
 	}
-	msgs = RenderTelegram(many)
+	msgs = RenderTelegram("Vols Tokyo", many)
 	if len(msgs) < 2 {
 		t.Fatalf("expected split into several messages, got %d", len(msgs))
 	}

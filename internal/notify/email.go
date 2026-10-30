@@ -37,7 +37,7 @@ type SMTPConfig struct {
 }
 
 var bodyTmpl = template.Must(template.New("mail").Parse(`<html><body style="font-family:sans-serif">
-<h2>✈️ {{len .Deals}} offre(s) Tokyo</h2>
+<h2>✈️ {{.Name}} : {{len .Deals}} offre(s)</h2>
 {{if not .Deals}}<p>Aucune offre ne correspond aux critères (e-mail de test).</p>{{end}}
 <table cellpadding="6" style="border-collapse:collapse">
 <tr style="background:#eee"><th>Aller</th><th>Retour</th><th>Jours</th><th>Trajet</th><th>Prix</th><th>Escales</th><th>Compagnies</th><th>Pourquoi</th><th>Prix habituel</th><th></th></tr>
@@ -50,18 +50,22 @@ var bodyTmpl = template.Must(template.New("mail").Parse(`<html><body style="font
 <p style="color:#888">Prix aller-retour, 1 adulte, économique. Vérifiez toujours le tarif sur le site avant de réserver.</p>
 </body></html>`))
 
-func Render(deals []DealRow) (subject, html string, err error) {
+// Render formats deals for the watch called name as an e-mail.
+func Render(name string, deals []DealRow) (subject, html string, err error) {
 	var buf bytes.Buffer
-	if err := bodyTmpl.Execute(&buf, struct{ Deals []DealRow }{deals}); err != nil {
+	if err := bodyTmpl.Execute(&buf, struct {
+		Name  string
+		Deals []DealRow
+	}{name, deals}); err != nil {
 		return "", "", err
 	}
-	subject = "Vols Tokyo : aucune offre (test)"
+	subject = name + " : aucune offre (test)"
 	if len(deals) > 0 {
 		cheapest := deals[0].Price
 		for _, d := range deals {
 			cheapest = min(cheapest, d.Price)
 		}
-		subject = fmt.Sprintf("Vols Tokyo : %d offre(s) dès %d €", len(deals), cheapest)
+		subject = fmt.Sprintf("%s : %d offre(s) dès %d €", name, len(deals), cheapest)
 	}
 	return subject, buf.String(), nil
 }

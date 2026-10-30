@@ -178,7 +178,7 @@ func ToOffer(it flightapi.Itinerary) (Offer, bool) {
 }
 
 // PickOffer chooses the offer to report from a detailed search: the cheapest one at the
-// preferred destination, unless another airport is at least narita_min_saving cheaper.
+// preferred destination, unless another airport is at least other_airport_min_saving cheaper.
 // When another airport wins, preferred is the best preferred-airport offer for comparison.
 func PickOffer(cfg *config.Config, resp *flightapi.Response, maxStops int) (chosen Offer, preferred *Offer, ok bool) {
 	var cheapest, bestPref *Offer
@@ -199,7 +199,7 @@ func PickOffer(cfg *config.Config, resp *flightapi.Response, maxStops int) (chos
 		return Offer{}, nil, false
 	case bestPref == nil || cheapest.Destination == cfg.PreferredDestination:
 		return *cheapest, nil, true
-	case cheapest.Price <= bestPref.Price-cfg.NaritaMinSaving:
+	case cheapest.Price <= bestPref.Price-cfg.OtherAirportMinSaving:
 		return *cheapest, bestPref, true
 	default:
 		return *bestPref, nil, true

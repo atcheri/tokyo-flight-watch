@@ -36,16 +36,19 @@ func ParseCombo(outbound, ret string) (Combo, error) {
 	return Combo{Outbound: out, Return: back, StayDays: int(back.Sub(out).Hours() / 24)}, nil
 }
 
-// Wanted reports whether the combo is inside the configured window and stay range.
-func Wanted(cfg *config.Config, c Combo) bool {
-	return !c.Outbound.Before(cfg.DepartureFromDate()) && !c.Outbound.After(cfg.DepartureToDate()) &&
+// Wanted reports whether the combo is inside the departure window of a run on today,
+// after today, and within the stay range.
+func Wanted(cfg *config.Config, c Combo, today time.Time) bool {
+	from, to := cfg.Window(today)
+	return !c.Outbound.Before(from) && !c.Outbound.After(to) && c.Outbound.After(today) &&
 		c.StayDays >= cfg.MinStayDays && c.StayDays <= cfg.MaxStayDays
 }
 
 // All returns every wanted combination whose outbound date is after today.
 func All(cfg *config.Config, today time.Time) []Combo {
 	var combos []Combo
-	for d := firstDeparture(cfg, today); !d.After(cfg.DepartureToDate()); d = d.AddDate(0, 0, 1) {
+	_, last := cfg.Window(today)
+	for d := firstDeparture(cfg, today); !d.After(last); d = d.AddDate(0, 0, 1) {
 		for stay := cfg.MinStayDays; stay <= cfg.MaxStayDays; stay++ {
 			combos = append(combos, Combo{Outbound: d, Return: d.AddDate(0, 0, stay), StayDays: stay})
 		}
@@ -79,10 +82,11 @@ func Windows(cfg *config.Config, today time.Time, maxSize int) []Window {
 		n++
 	}
 	var windows []Window
-	for d := firstDeparture(cfg, today); !d.After(cfg.DepartureToDate()); d = d.AddDate(0, 0, n) {
+	_, last := cfg.Window(today)
+	for d := firstDeparture(cfg, today); !d.After(last); d = d.AddDate(0, 0, n) {
 		end := d.AddDate(0, 0, n-1)
-		if end.After(cfg.DepartureToDate()) {
-			end = cfg.DepartureToDate()
+		if end.After(last) {
+			end = last
 		}
 		windows = append(windows, Window{
 			OutboundStart: d,
@@ -95,10 +99,11 @@ func Windows(cfg *config.Config, today time.Time, maxSize int) []Window {
 }
 
 func firstDeparture(cfg *config.Config, today time.Time) time.Time {
-	if tomorrow := today.AddDate(0, 0, 1); tomorrow.After(cfg.DepartureFromDate()) {
+	from, _ := cfg.Window(today)
+	if tomorrow := today.AddDate(0, 0, 1); tomorrow.After(from) {
 		return tomorrow
 	}
-	return cfg.DepartureFromDate()
+	return from
 }
 
 func days(from, to time.Time) int {

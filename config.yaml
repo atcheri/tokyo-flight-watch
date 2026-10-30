@@ -1,8 +1,10 @@
+name: Vols Tokyo
+
 # Aéroports de départ et d'arrivée (codes IATA)
 origins: [FRA, CGN, DUS]
 destinations: [HND, NRT]
 preferred_destination: HND
-narita_min_saving: 100          # un autre aéroport n'est retenu que s'il est au moins X € moins cher
+other_airport_min_saving: 100   # un autre aéroport n'est retenu que s'il est au moins X € moins cher
 
 # Fenêtre de départ (incluse) et durées de séjour en jours
 departure_from: 2027-03-22

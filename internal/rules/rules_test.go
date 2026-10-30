@@ -17,7 +17,7 @@ var today = time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC)
 func testConfig() *config.Config {
 	return &config.Config{
 		PreferredDestination:  "HND",
-		NaritaMinSaving:       100,
+		OtherAirportMinSaving: 100,
 		MaxStops:              1,
 		TargetPrice:           900,
 		TargetPriceDirect:     1300,
@@ -177,7 +177,7 @@ func TestPickOffer(t *testing.T) {
 		t.Fatalf("NRT 250 € cheaper should win: offer %+v, preferred %+v", offer, pref)
 	}
 
-	cfg.NaritaMinSaving = 300
+	cfg.OtherAirportMinSaving = 300
 	offer, pref, _ = PickOffer(cfg, resp, 1)
 	if offer.Destination != "HND" || offer.Price != 1100 || pref != nil {
 		t.Fatalf("HND should win when NRT saves < 300 €: offer %+v", offer)

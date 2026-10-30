@@ -37,3 +37,21 @@ func TestParseCalendar(t *testing.T) {
 		t.Fatal("expected an error for an invalid key")
 	}
 }
+
+func TestParseCredits(t *testing.T) {
+	body := `{"account":{"current_month_usage":52,"monthly_allowance":100,"remaining_credits":48},"api_usage":{}}`
+	if got, err := ParseCredits([]byte(body), http.StatusOK); err != nil || got != 48 {
+		t.Fatalf("ParseCredits = %d, %v", got, err)
+	}
+	if _, err := ParseCredits([]byte(`{"account":{}}`), http.StatusOK); err == nil {
+		t.Fatal("missing remaining_credits must be an error")
+	}
+}
+
+func TestFiltersParams(t *testing.T) {
+	p := Filters{Origins: []string{"FRA", "CGN"}, Destinations: []string{"HND"}, Adults: 1, MaxStops: 0,
+		IncludedAirlines: "STAR_ALLIANCE"}.params("google_flights")
+	if p.Get("stops") != "nonstop" || p.Get("included_airlines") != "STAR_ALLIANCE" || p.Get("departure_id") != "FRA,CGN" || p.Has("api_key") {
+		t.Fatalf("params = %v", p)
+	}
+}

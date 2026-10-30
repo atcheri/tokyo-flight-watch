@@ -12,6 +12,7 @@ import (
 )
 
 type DealRow struct {
+	Title       string // category, e.g. "Vol direct Star Alliance"
 	Outbound    string
 	Return      string
 	StayDays    int
@@ -21,7 +22,8 @@ type DealRow struct {
 	Stops       int
 	Airlines    string
 	Reasons     string
-	Typical     string // Google's typical price range, if known
+	Typical     string // Google's typical price range and level, if known
+	Note        string // extra context, e.g. the best price at the preferred airport
 	URL         string
 }
 
@@ -41,8 +43,8 @@ var bodyTmpl = template.Must(template.New("mail").Parse(`<html><body style="font
 <tr style="background:#eee"><th>Aller</th><th>Retour</th><th>Jours</th><th>Trajet</th><th>Prix</th><th>Escales</th><th>Compagnies</th><th>Pourquoi</th><th>Prix habituel</th><th></th></tr>
 {{range .Deals}}<tr style="border-top:1px solid #ddd">
 <td>{{.Outbound}}</td><td>{{.Return}}</td><td>{{.StayDays}}</td><td>{{.Origin}} → {{.Destination}}</td>
-<td><b>{{.Price}} €</b></td><td>{{if eq .Stops 0}}direct{{else}}{{.Stops}}{{end}}</td><td>{{.Airlines}}</td>
-<td>{{.Reasons}}</td><td>{{.Typical}}</td><td>{{if .URL}}<a href="{{.URL}}">Google Flights</a>{{end}}</td>
+<td><b>{{.Price}} €</b></td><td>{{if lt .Stops 0}}?{{else if eq .Stops 0}}direct{{else}}{{.Stops}}{{end}}</td><td>{{.Airlines}}</td>
+<td>{{.Title}} : {{.Reasons}}{{if .Note}}<br>{{.Note}}{{end}}</td><td>{{.Typical}}</td><td>{{if .URL}}<a href="{{.URL}}">Google Flights</a>{{end}}</td>
 </tr>{{end}}
 </table>
 <p style="color:#888">Prix aller-retour, 1 adulte, économique. Vérifiez toujours le tarif sur le site avant de réserver.</p>

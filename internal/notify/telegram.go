@@ -36,16 +36,27 @@ func RenderTelegram(deals []DealRow) []string {
 	current := header
 	for _, d := range deals {
 		stops := "direct"
-		if d.Stops > 0 {
+		if d.Stops < 0 {
+			stops = "escales non vérifiées"
+		} else if d.Stops > 0 {
 			stops = fmt.Sprintf("%d escale(s)", d.Stops)
 		}
 		var b strings.Builder
-		fmt.Fprintf(&b, "\n\n<b>%d €</b> · %s → %s · %s\n", d.Price, d.Origin, d.Destination, stops)
+		b.WriteString("\n")
+		if d.Title != "" {
+			fmt.Fprintf(&b, "\n<u>%s</u>", html.EscapeString(d.Title))
+		}
+		fmt.Fprintf(&b, "\n<b>%d €</b> · %s → %s · %s\n", d.Price, html.EscapeString(d.Origin), html.EscapeString(d.Destination), stops)
 		fmt.Fprintf(&b, "📅 %s → %s (%d j)\n", d.Outbound, d.Return, d.StayDays)
-		fmt.Fprintf(&b, "🛫 %s\n", html.EscapeString(d.Airlines))
+		if d.Airlines != "" {
+			fmt.Fprintf(&b, "🛫 %s\n", html.EscapeString(d.Airlines))
+		}
 		fmt.Fprintf(&b, "💡 %s", html.EscapeString(d.Reasons))
+		if d.Note != "" {
+			fmt.Fprintf(&b, "\nℹ️ %s", html.EscapeString(d.Note))
+		}
 		if d.Typical != "" {
-			fmt.Fprintf(&b, "\n📊 prix habituel : %s", d.Typical)
+			fmt.Fprintf(&b, "\n📊 Google : %s", html.EscapeString(d.Typical))
 		}
 		if d.URL != "" {
 			fmt.Fprintf(&b, "\n<a href=\"%s\">Voir sur Google Flights</a>", html.EscapeString(d.URL))

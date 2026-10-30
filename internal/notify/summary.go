@@ -18,42 +18,51 @@ type Summary struct {
 	Date        string
 	DatePairs   int        // date pairs priced today
 	Cheapest    []PriceRow // cheapest pairs, at most max_stops
-	BestDirect  *PriceRow  // cheapest nonstop Star Alliance pair, if any
-	LowestEver  int
+	BestDirect  *PriceRow  // cheapest direct pair, if watched and found
+	UsualAny    int        // usual best prices, 0 if not enough history
+	UsualDir    int
 	WeekAgoAny  int // best prices 7 days ago, 0 if unknown
 	WeekAgoDir  int
 	RequestsWk  int // API requests over the last 7 days
 	AlertsWk    int
 	DaysTracked int
+	Credits     int // remaining SearchApi credits, -1 if unknown
+	PerRun      int // requests used by one run
 }
 
-// RenderSummary formats the weekly summary as one Telegram HTML message.
+// RenderSummary formats the periodic summary as one Telegram HTML message.
 func RenderSummary(s Summary) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "📊 <b>Résumé hebdo vols Tokyo</b> (%s)\n", s.Date)
-	fmt.Fprintf(&b, "%d combinaisons de dates suivies chaque jour.\n", s.DatePairs)
+	fmt.Fprintf(&b, "📊 <b>Résumé vols Tokyo</b> (%s)\n", s.Date)
+	fmt.Fprintf(&b, "%d combinaisons de dates suivies à chaque lancement.\n", s.DatePairs)
 
 	if len(s.Cheapest) > 0 {
 		fmt.Fprintf(&b, "\n<b>Moins chers (≤ 1 escale)</b>%s\n", trend(s.Cheapest[0].Price, s.WeekAgoAny))
 		for _, r := range s.Cheapest {
 			fmt.Fprintf(&b, "• %s\n", row(r))
 		}
+		if s.UsualAny > 0 {
+			fmt.Fprintf(&b, "Meilleur prix habituel : %d €\n", s.UsualAny)
+		}
 	} else {
 		b.WriteString("\nAucun prix relevé aujourd'hui.\n")
 	}
 
-	b.WriteString("\n<b>Direct Star Alliance</b>")
 	if s.BestDirect != nil {
-		fmt.Fprintf(&b, "%s\n• %s\n", trend(s.BestDirect.Price, s.WeekAgoDir), row(*s.BestDirect))
-	} else {
-		b.WriteString("\n• aucun vol trouvé sur la période\n")
+		fmt.Fprintf(&b, "\n<b>Direct Star Alliance</b>%s\n• %s\n", trend(s.BestDirect.Price, s.WeekAgoDir), row(*s.BestDirect))
+		if s.UsualDir > 0 {
+			fmt.Fprintf(&b, "Meilleur prix habituel : %d €\n", s.UsualDir)
+		}
 	}
 
-	if s.LowestEver > 0 {
-		fmt.Fprintf(&b, "\nPlus bas jamais vu : %d €\n", s.LowestEver)
-	}
-	fmt.Fprintf(&b, "7 derniers jours : %d alerte(s), %d requête(s) API sur %d jour(s) de suivi.",
+	fmt.Fprintf(&b, "\n7 derniers jours : %d alerte(s), %d requête(s) API sur %d jour(s) de suivi.",
 		s.AlertsWk, s.RequestsWk, s.DaysTracked)
+	if s.Credits >= 0 {
+		fmt.Fprintf(&b, "\nCrédits SearchApi restants : %d", s.Credits)
+		if s.PerRun > 0 {
+			fmt.Fprintf(&b, " (≈ %d lancements)", s.Credits/s.PerRun)
+		}
+	}
 	return b.String()
 }
 

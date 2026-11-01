@@ -27,6 +27,21 @@
       "median_direct": 1316,
       "requests": 6,
       "alerts": 0
+    },
+    {
+      "date": "2026-11-01",
+      "best_any": {
+        "key": "2027-04-03_2027-04-16",
+        "price": 756
+      },
+      "best_direct": {
+        "key": "2027-04-07_2027-04-14",
+        "price": 1151
+      },
+      "median_any": 1051,
+      "median_direct": 1353,
+      "requests": 6,
+      "alerts": 0
     }
   ],
   "alerts": {
@@ -34,8 +49,10 @@
       "price": 756
     },
     "direct": {
-      "price": 1086
+      "price": 1086,
+      "gone_runs": 1
     }
   },
-  "last_summary": "2026-10-30"
+  "last_summary": "2026-10-30",
+  "last_credit_warning": "2026-11-01"
 }

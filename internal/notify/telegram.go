@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"net/http"
@@ -259,12 +260,24 @@ func (t *Telegram) call(ctx context.Context, method string, form url.Values, out
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := t.HTTP.Do(req)
 	if err != nil {
-		// Don't wrap: *url.Error would print the URL, which contains the token.
-		return fmt.Errorf("telegram %s request failed", method)
+		return fmt.Errorf("telegram %s request failed: %s", method, t.redact(err))
 	}
 	defer resp.Body.Close()
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
 		return fmt.Errorf("telegram %s: decode response (status %d): %w", method, resp.StatusCode, err)
 	}
 	return nil
+}
+
+// redact describes a transport error without the request URL, which contains the token.
+func (t *Telegram) redact(err error) string {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		err = urlErr.Err // e.g. "context deadline exceeded", "dial tcp …: connection refused"
+	}
+	msg := err.Error()
+	if t.Token != "" {
+		msg = strings.ReplaceAll(msg, t.Token, "<token>")
+	}
+	return msg
 }

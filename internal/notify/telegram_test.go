@@ -80,3 +80,20 @@ func TestTelegramAPI(t *testing.T) {
 		t.Fatalf("calls = %q", calls)
 	}
 }
+
+func TestTelegramTransportErrorHidesToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, _, _ := w.(http.Hijacker).Hijack()
+		conn.Close() // drop the connection without answering
+	}))
+	defer srv.Close()
+	tg := NewTelegram("123:secret-token", "42")
+	tg.BaseURL = srv.URL
+	err := tg.Send(context.Background(), []string{"hi"})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if msg := err.Error(); strings.Contains(msg, "secret-token") || !strings.Contains(msg, "request failed: ") || !strings.Contains(msg, "EOF") {
+		t.Fatalf("error = %q", msg)
+	}
+}

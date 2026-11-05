@@ -55,6 +55,7 @@ Un service Go unique : il reçoit les messages Telegram (long polling, donc ni d
    - `INVITE_CODE` : un code à partager avec vos proches
    - `MAX_WATCHES` (optionnel) : nombre de suivis par personne, 5 par défaut
    - `LOG_FORMAT` (optionnel) : `text` (par défaut, lignes `clé=valeur`) ou `json` ; `LOG_LEVEL` : `debug`, `info` (par défaut), `warn` ou `error`
+   - `ADMIN_CHAT_ID` (optionnel) : votre identifiant de chat Telegram (indiqué par la ligne `new user` des journaux). Les erreurs du bot vous y sont envoyées, au plus une fois par heure. Il faut avoir écrit au moins une fois au bot.
 5. Déployez. Les journaux doivent afficher `bot started`. Le volume `bot-data` conserve la base entre les déploiements.
 
 ### Utilisation

@@ -9,6 +9,7 @@
 //	DATA_DIR            directory for the database and its daily backups (default /data)
 //	MAX_WATCHES         watches per user (default 5)
 //	LOG_FORMAT          text (default) or json; LOG_LEVEL: debug, info (default), warn or error
+//	ADMIN_CHAT_ID       Telegram chat that receives error alerts, at most one per hour (optional)
 package main
 
 import (
@@ -33,6 +34,7 @@ import (
 
 const (
 	scheduleInterval = 2 * time.Minute
+	alertEvery       = time.Hour
 	backupsKept      = 7
 )
 
@@ -60,6 +62,15 @@ func main() {
 	defer stop()
 
 	tg := notify.NewTelegram(token, "")
+	adminChat := os.Getenv("ADMIN_CHAT_ID")
+	if adminChat != "" {
+		alerts := logging.NewAlertHandler(slog.Default().Handler(), alertEvery, func(text string) error {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			return tg.SendTo(ctx, adminChat, text)
+		})
+		slog.SetDefault(slog.New(alerts))
+	}
 	if err := tg.SetCommands(ctx, bot.Commands); err != nil {
 		slog.Warn("set command menu", "err", err)
 	}
@@ -70,7 +81,7 @@ func main() {
 
 	go b.Schedule(ctx, scheduleInterval)
 	go backups(ctx, st, filepath.Join(dataDir, "backups"))
-	slog.Info("bot started", "data_dir", dataDir, "schedule_every", scheduleInterval)
+	slog.Info("bot started", "data_dir", dataDir, "schedule_every", scheduleInterval, "error_alerts", adminChat != "")
 	b.Serve(ctx, tg)
 	slog.Info("bot stopped")
 }

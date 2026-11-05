@@ -11,6 +11,7 @@ services:
       MAX_WATCHES: ${MAX_WATCHES:-5}
       LOG_FORMAT: ${LOG_FORMAT:-text}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      ADMIN_CHAT_ID: ${ADMIN_CHAT_ID:-}
       DATA_DIR: /data
     volumes:
       - bot-data:/data

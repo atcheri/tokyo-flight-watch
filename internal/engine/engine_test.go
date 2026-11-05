@@ -24,6 +24,7 @@ type fakeAPI struct {
 	credits      int
 	failAll      bool
 	failDirect   bool
+	noResults    bool
 	searches     []map[string]string
 	unauthorized int
 }
@@ -56,6 +57,10 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch q["engine"] {
 	case "google_flights_calendar":
+		if f.noResults {
+			w.Write([]byte(`{"error":"Google Flights hasn't returned any results for this query."}`))
+			return
+		}
 		var cal []map[string]any
 		out, _ := time.Parse("2006-01-02", q["outbound_date"])
 		outEnd, _ := time.Parse("2006-01-02", q["outbound_date_end"])
@@ -212,5 +217,21 @@ func TestRunExpiredAndOverBudget(t *testing.T) {
 	}
 	if got := ScanCost(cfg, today); got != 2 {
 		t.Fatalf("ScanCost = %d, want 2", got)
+	}
+}
+
+func TestRunWarnsWhenNoPrices(t *testing.T) {
+	cfg, api, client := setup(t, 100)
+	h := &state.History{Alerts: map[string]*state.Alert{"any": {Best: state.Best{Key: "2026-12-01_2026-12-08", Price: 900}, Date: "2026-10-30"}}}
+	api.noResults = true
+	rep, err := Run(context.Background(), cfg, h, client, today, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Messages) != 1 || !strings.Contains(rep.Messages[0], "aucun prix") || !strings.Contains(rep.Messages[0], "any results") {
+		t.Fatalf("messages %q", rep.Messages)
+	}
+	if rep.Summary != "" || len(h.Days) != 0 || h.Alerts["any"].GoneRuns != 0 {
+		t.Fatalf("an empty scan must leave the history alone: %+v, summary %q", h, rep.Summary)
 	}
 }

@@ -4,6 +4,7 @@ package flightapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -230,6 +231,9 @@ func ParseCalendar(body []byte, status int) ([]CalendarPrice, error) {
 	if err := json.Unmarshal(body, &r); err != nil {
 		return nil, fmt.Errorf("decode calendar (status %d): %w", status, err)
 	}
+	if isNoResults(r.Error) {
+		return nil, fmt.Errorf("%w: %s", ErrNoResults, r.Error)
+	}
 	if err := checkError(r.Error, status); err != nil {
 		return nil, err
 	}
@@ -261,10 +265,18 @@ func ParseCredits(body []byte, status int) (int, error) {
 	return *r.Account.RemainingCredits, nil
 }
 
+// ErrNoResults means Google Flights had no price for the query: not a failure, but worth reporting.
+var ErrNoResults = errors.New("no results")
+
+func isNoResults(msg string) bool {
+	m := strings.ToLower(msg)
+	return strings.Contains(m, "any results") || strings.Contains(m, "no results")
+}
+
 func checkError(msg string, status int) error {
 	if msg != "" {
-		// "no results" is a normal outcome, not a failure.
-		if m := strings.ToLower(msg); strings.Contains(m, "any results") || strings.Contains(m, "no results") {
+		// "no results" is a normal outcome for a detailed search, not a failure.
+		if isNoResults(msg) {
 			return nil
 		}
 		return fmt.Errorf("api error (status %d): %s", status, msg)

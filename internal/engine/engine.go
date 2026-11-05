@@ -108,9 +108,23 @@ func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flig
 		return rep, nil
 	}
 
-	scan, failed := scanCalendar(ctx, client, cfg, ps, windows, today)
+	scan, failed, apiNote := scanCalendar(ctx, client, cfg, ps, windows, today)
 	if failed == scanCost {
 		return rep, fmt.Errorf("all %d calendar requests failed", scanCost)
+	}
+	if len(scan[rules.KindAny]) == 0 && len(scan[rules.KindDirect]) == 0 {
+		// Nothing to compare: say so instead of staying silent, and keep the history as it was.
+		rep.Requests = used()
+		if credits >= 0 {
+			rep.CreditsLeft = max(credits-used(), 0)
+		}
+		msg := fmt.Sprintf("⚠️ <b>%s</b> : SearchApi n'a renvoyé aucun prix pour ces dates (%d requête(s) utilisée(s)). "+
+			"Vérifiez les aéroports et les dates avec /liste ; le suivi continue.", html.EscapeString(cfg.Name), used())
+		if apiNote != "" {
+			msg += "\nRéponse de SearchApi : <i>" + html.EscapeString(apiNote) + "</i>"
+		}
+		rep.Messages = []string{msg}
+		return rep, nil
 	}
 	if failed > 0 {
 		rep.Warnings = append(rep.Warnings, fmt.Sprintf("⚠️ %d requête(s) du calendrier sur %d ont échoué : résultats incomplets.", failed, scanCost))
@@ -173,11 +187,10 @@ func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flig
 }
 
 // scanCalendar prices every wanted date pair for each pass. It returns the prices by
-// category and the number of failed requests.
+// category, the number of failed requests and the last "no results" message of the API.
 func scanCalendar(ctx context.Context, client *flightapi.Client, cfg *config.Config, ps []pass,
-	windows []schedule.Window, today time.Time) (rules.Scan, int) {
-	scan := rules.Scan{}
-	failed := 0
+	windows []schedule.Window, today time.Time) (scan rules.Scan, failed int, apiNote string) {
+	scan = rules.Scan{}
 	for _, p := range ps {
 		prices := map[string]int{}
 		scan[p.kind] = prices
@@ -188,23 +201,31 @@ func scanCalendar(ctx context.Context, client *flightapi.Client, cfg *config.Con
 				OutboundStart: outStart, OutboundEnd: outEnd,
 				ReturnStart: retStart, ReturnEnd: retEnd,
 			})
+			if errors.Is(err, flightapi.ErrNoResults) {
+				log.Printf("calendar %s %s..%s: %v", p.kind, outStart, outEnd, err)
+				apiNote = strings.TrimPrefix(err.Error(), flightapi.ErrNoResults.Error()+": ")
+				continue
+			}
 			if err != nil {
 				failed++
 				log.Printf("calendar %s %s..%s: %v", p.kind, outStart, outEnd, err)
 				continue
 			}
+			kept := 0
 			for _, cp := range result {
 				combo, err := schedule.ParseCombo(cp.Departure, cp.Return)
 				if err != nil || !schedule.Wanted(cfg, combo, today) {
 					continue
 				}
+				kept++
 				if old, ok := prices[combo.Key()]; !ok || cp.Price < old {
 					prices[combo.Key()] = cp.Price
 				}
 			}
+			log.Printf("calendar %s %s..%s: %d price(s), %d kept", p.kind, outStart, outEnd, len(result), kept)
 		}
 	}
-	return scan, failed
+	return scan, failed, apiNote
 }
 
 func anyTitle(cfg *config.Config) string {

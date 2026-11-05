@@ -8,7 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -17,6 +17,7 @@ import (
 	"github.com/atch/tokyo-flight-watch/internal/config"
 	"github.com/atch/tokyo-flight-watch/internal/engine"
 	"github.com/atch/tokyo-flight-watch/internal/flightapi"
+	"github.com/atch/tokyo-flight-watch/internal/logging"
 	"github.com/atch/tokyo-flight-watch/internal/notify"
 	"github.com/atch/tokyo-flight-watch/internal/state"
 )
@@ -28,6 +29,7 @@ type options struct {
 }
 
 func main() {
+	logging.Setup()
 	var o options
 	flag.StringVar(&o.configPath, "config", "config.yaml", "path to config file")
 	flag.StringVar(&o.statePath, "state", "state/history.json", "path to price history")
@@ -39,7 +41,7 @@ func main() {
 
 	if *chatID {
 		if err := printTelegramChats(); err != nil {
-			log.Fatal(err)
+			logging.Fatal("list telegram chats", "err", err)
 		}
 		return
 	}
@@ -47,10 +49,10 @@ func main() {
 		if !o.dryRun {
 			msg := "⚠️ <b>Échec de la vérification des vols</b>\n" + html.EscapeString(err.Error())
 			if sendErr := deliver(context.Background(), []string{msg}, "Échec de la vérification des vols", msg, false); sendErr != nil {
-				log.Printf("could not report the failure: %v", sendErr)
+				slog.Error("could not report the failure", "err", sendErr)
 			}
 		}
-		log.Fatal(err)
+		logging.Fatal("check failed", "err", err)
 	}
 }
 
@@ -74,7 +76,7 @@ func run(o options) error {
 		return err
 	}
 	if rep.Expired {
-		log.Println("the departure window is in the past, nothing to check")
+		slog.Info("the departure window is in the past, nothing to check")
 		return nil
 	}
 
@@ -93,7 +95,7 @@ func run(o options) error {
 			return err
 		}
 	} else {
-		log.Println("no deal today")
+		slog.Info("no deal today")
 	}
 	if rep.Summary != "" {
 		mail := "<html><body>" + strings.ReplaceAll(rep.Summary, "\n", "<br>") + "</body></html>"
@@ -102,7 +104,7 @@ func run(o options) error {
 		}
 	}
 
-	log.Printf("%d API request(s) used, %d credit(s) left", rep.Requests, rep.CreditsLeft)
+	slog.Info("check done", "requests", rep.Requests, "credits_left", rep.CreditsLeft)
 	if o.dryRun {
 		return nil
 	}
@@ -123,7 +125,7 @@ func deliver(ctx context.Context, telegramMsgs []string, subject, mail string, d
 		if err := notify.NewTelegram(token, chatID).Send(ctx, telegramMsgs); err != nil {
 			return err
 		}
-		log.Printf("telegram: %d message(s) sent", len(telegramMsgs))
+		slog.Info("telegram messages sent", "count", len(telegramMsgs))
 		return nil
 	}
 
@@ -134,7 +136,7 @@ func deliver(ctx context.Context, telegramMsgs []string, subject, mail string, d
 	if err := notify.Send(smtpCfg, subject, mail); err != nil {
 		return err
 	}
-	log.Printf("e-mail sent: %s", subject)
+	slog.Info("e-mail sent", "subject", subject)
 	return nil
 }
 

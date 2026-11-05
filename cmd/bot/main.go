@@ -8,11 +8,12 @@
 //	INVITE_CODE         code new users send with /start (required)
 //	DATA_DIR            directory for the database and its daily backups (default /data)
 //	MAX_WATCHES         watches per user (default 5)
+//	LOG_FORMAT          text (default) or json; LOG_LEVEL: debug, info (default), warn or error
 package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/atch/tokyo-flight-watch/internal/bot"
 	"github.com/atch/tokyo-flight-watch/internal/flightapi"
+	"github.com/atch/tokyo-flight-watch/internal/logging"
 	"github.com/atch/tokyo-flight-watch/internal/notify"
 	"github.com/atch/tokyo-flight-watch/internal/secret"
 	"github.com/atch/tokyo-flight-watch/internal/store"
@@ -35,21 +37,22 @@ const (
 )
 
 func main() {
+	logging.Setup()
 	token := mustEnv("TELEGRAM_BOT_TOKEN")
 	invite := mustEnv("INVITE_CODE")
 	box, err := secret.New(mustEnv("BOT_SECRET_KEY"))
 	if err != nil {
-		log.Fatalf("BOT_SECRET_KEY: %v", err)
+		logging.Fatal("invalid BOT_SECRET_KEY", "err", err)
 	}
 	dataDir := envOr("DATA_DIR", "/data")
 	maxWatches, _ := strconv.Atoi(os.Getenv("MAX_WATCHES"))
 
 	if err := os.MkdirAll(filepath.Join(dataDir, "backups"), 0o700); err != nil {
-		log.Fatal(err)
+		logging.Fatal("create data directory", "dir", dataDir, "err", err)
 	}
 	st, err := store.Open(filepath.Join(dataDir, "bot.db"))
 	if err != nil {
-		log.Fatal(err)
+		logging.Fatal("open database", "err", err)
 	}
 	defer st.Close()
 
@@ -58,7 +61,7 @@ func main() {
 
 	tg := notify.NewTelegram(token, "")
 	if err := tg.SetCommands(ctx, bot.Commands); err != nil {
-		log.Printf("set command menu: %v", err)
+		slog.Warn("set command menu", "err", err)
 	}
 	b := &bot.Bot{
 		Msg: tg, Store: st, Box: box, InviteCode: invite, MaxWatches: maxWatches,
@@ -67,9 +70,9 @@ func main() {
 
 	go b.Schedule(ctx, scheduleInterval)
 	go backups(ctx, st, filepath.Join(dataDir, "backups"))
-	log.Println("bot started")
+	slog.Info("bot started", "data_dir", dataDir, "schedule_every", scheduleInterval)
 	b.Serve(ctx, tg)
-	log.Println("bot stopped")
+	slog.Info("bot stopped")
 }
 
 // backups writes a copy of the database every day and keeps the last few.
@@ -78,7 +81,7 @@ func backups(ctx context.Context, st *store.Store, dir string) {
 		path := filepath.Join(dir, "bot-"+time.Now().UTC().Format("2006-01-02")+".db")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			if err := st.Backup(ctx, path); err != nil {
-				log.Printf("backup: %v", err)
+				slog.Error("backup", "path", path, "err", err)
 			}
 		}
 		old, _ := filepath.Glob(filepath.Join(dir, "bot-*.db"))
@@ -98,7 +101,7 @@ func backups(ctx context.Context, st *store.Store, dir string) {
 func mustEnv(key string) string {
 	v := os.Getenv(key)
 	if v == "" {
-		log.Fatalf("%s is not set", key)
+		logging.Fatal("missing environment variable", "name", key)
 	}
 	return v
 }

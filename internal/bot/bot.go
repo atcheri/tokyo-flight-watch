@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,7 +99,7 @@ func (b *Bot) maxWatches() int {
 
 func (b *Bot) reply(ctx context.Context, chatID int64, text string) {
 	if err := b.Msg.SendTo(ctx, strconv.FormatInt(chatID, 10), text); err != nil {
-		log.Printf("send to %d: %v", chatID, err)
+		slog.Error("send message", "chat", chatID, "err", err)
 	}
 }
 
@@ -116,7 +116,7 @@ func (b *Bot) HandleUpdate(ctx context.Context, u notify.Update) {
 		return
 	}
 	if err != nil {
-		log.Printf("load user %d: %v", u.ChatID, err)
+		slog.Error("load user", "chat", u.ChatID, "err", err)
 		b.reply(ctx, u.ChatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -180,11 +180,11 @@ func splitCommand(text string) (cmd, arg string) {
 func (b *Bot) handleStranger(ctx context.Context, u notify.Update, cmd, arg string) {
 	if cmd == "/start" && b.InviteCode != "" && subtle.ConstantTimeCompare([]byte(arg), []byte(b.InviteCode)) == 1 {
 		if err := b.Store.CreateUser(ctx, u.ChatID, u.Name, b.now()); err != nil {
-			log.Printf("create user %d: %v", u.ChatID, err)
+			slog.Error("create user", "chat", u.ChatID, "err", err)
 			b.reply(ctx, u.ChatID, "⚠️ Erreur interne, réessayez plus tard.")
 			return
 		}
-		log.Printf("new user %d (%s)", u.ChatID, u.Name)
+		slog.Info("new user", "chat", u.ChatID, "name", u.Name)
 		b.reply(ctx, u.ChatID, "Bienvenue "+html.EscapeString(u.Name)+" !\n\n"+helpText)
 		return
 	}
@@ -196,12 +196,12 @@ func (b *Bot) handleStranger(ctx context.Context, u notify.Update, cmd, arg stri
 func (b *Bot) saveKey(ctx context.Context, u notify.Update, key string) {
 	chat := strconv.FormatInt(u.ChatID, 10)
 	if err := b.Msg.DeleteMessage(ctx, chat, u.MessageID); err != nil {
-		log.Printf("delete key message: %v", err)
+		slog.Warn("delete key message", "chat", u.ChatID, "err", err)
 	}
 	key = strings.TrimSpace(key)
 	credits, err := b.NewClient(key).Credits(ctx)
 	if err != nil {
-		log.Printf("check key of %d: %v", u.ChatID, err)
+		slog.Warn("check api key", "chat", u.ChatID, "err", err)
 		b.reply(ctx, u.ChatID, "❌ SearchApi refuse cette clé. Vérifiez-la sur searchapi.io (API Key), puis renvoyez /cle.")
 		return
 	}
@@ -210,7 +210,7 @@ func (b *Bot) saveKey(ctx context.Context, u notify.Update, key string) {
 		err = b.Store.SetAPIKey(ctx, u.ChatID, sealed)
 	}
 	if err != nil {
-		log.Printf("save key of %d: %v", u.ChatID, err)
+		slog.Error("save api key", "chat", u.ChatID, "err", err)
 		b.reply(ctx, u.ChatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -258,7 +258,7 @@ func (b *Bot) watchFromArg(ctx context.Context, chatID int64, arg string) (store
 func (b *Bot) listWatches(ctx context.Context, chatID int64) {
 	ws, err := b.Store.Watches(ctx, chatID)
 	if err != nil {
-		log.Printf("list watches of %d: %v", chatID, err)
+		slog.Error("list watches", "chat", chatID, "err", err)
 		b.reply(ctx, chatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -308,7 +308,7 @@ func (b *Bot) setPaused(ctx context.Context, chatID int64, arg string, paused bo
 		w.NextRun = b.now()
 	}
 	if err := b.Store.SaveWatch(ctx, w); err != nil {
-		log.Printf("save watch %d: %v", w.ID, err)
+		slog.Error("save watch", "watch", w.ID, "err", err)
 		b.reply(ctx, chatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -325,7 +325,7 @@ func (b *Bot) deleteWatch(ctx context.Context, chatID int64, arg string) {
 		return
 	}
 	if err := b.Store.DeleteWatch(ctx, chatID, w.ID); err != nil {
-		log.Printf("delete watch %d: %v", w.ID, err)
+		slog.Error("delete watch", "watch", w.ID, "chat", w.ChatID, "err", err)
 		b.reply(ctx, chatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -347,7 +347,7 @@ func (b *Bot) forget(ctx context.Context, chatID int64, arg string) {
 		return
 	}
 	if err := b.Store.DeleteUser(ctx, chatID); err != nil {
-		log.Printf("delete user %d: %v", chatID, err)
+		slog.Error("delete user", "chat", chatID, "err", err)
 		b.reply(ctx, chatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -360,7 +360,7 @@ func (b *Bot) forget(ctx context.Context, chatID int64, arg string) {
 func (b *Bot) RunDue(ctx context.Context) {
 	due, err := b.Store.DueWatches(ctx, b.now())
 	if err != nil {
-		log.Printf("due watches: %v", err)
+		slog.Error("load due watches", "err", err)
 		return
 	}
 	for _, w := range due {
@@ -377,6 +377,8 @@ func (b *Bot) runWatch(ctx context.Context, w store.Watch, opts engine.Options, 
 	b.runMu.Lock()
 	defer b.runMu.Unlock()
 	now := b.now()
+	lg := slog.With("watch", w.ID, "chat", w.ChatID, "scheduled", scheduled)
+	opts.Log = lg
 
 	next := w.NextRun
 	if scheduled {
@@ -384,6 +386,7 @@ func (b *Bot) runWatch(ctx context.Context, w store.Watch, opts engine.Options, 
 	}
 	fail := func(msg string, retry time.Duration) {
 		w.LastError = msg
+		lg.Warn("watch check not done", "reason", msg, "retry_in", retry)
 		if scheduled {
 			next = now.Add(retry)
 		}
@@ -392,7 +395,7 @@ func (b *Bot) runWatch(ctx context.Context, w store.Watch, opts engine.Options, 
 
 	user, err := b.Store.User(ctx, w.ChatID)
 	if err != nil {
-		log.Printf("watch %d: load user: %v", w.ID, err)
+		lg.Error("load user", "err", err)
 		return
 	}
 	cfg, err := config.Parse([]byte(w.Config))
@@ -410,14 +413,13 @@ func (b *Bot) runWatch(ctx context.Context, w store.Watch, opts engine.Options, 
 	}
 	h, err := state.Decode([]byte(w.History))
 	if err != nil {
-		log.Printf("watch %d: history unreadable, starting over: %v", w.ID, err)
+		lg.Warn("history unreadable, starting over", "err", err)
 		h, _ = state.Decode(nil)
 	}
 
 	rep, err := engine.Run(ctx, cfg, h, b.NewClient(key), engine.Today(now), opts)
 	switch {
 	case err != nil:
-		log.Printf("watch %d: %v", w.ID, err)
 		fail("la vérification a échoué ("+err.Error()+"), nouvel essai plus tard", retryAfterError)
 	case rep.Expired:
 		w.Paused, w.LastError = true, "terminé : la période de départ est passée"
@@ -440,7 +442,7 @@ func (b *Bot) runWatch(ctx context.Context, w store.Watch, opts engine.Options, 
 		}
 		if len(msgs) > 0 {
 			if err := b.Msg.SendTo(ctx, strconv.FormatInt(w.ChatID, 10), msgs...); err != nil {
-				log.Printf("watch %d: send: %v", w.ID, err)
+				lg.Error("send results", "err", err)
 			}
 		}
 	}
@@ -449,6 +451,8 @@ func (b *Bot) runWatch(ctx context.Context, w store.Watch, opts engine.Options, 
 		w.History = string(data)
 	}
 	w.LastRun = now
+	lg.Info("watch checked", "requests", rep.Requests, "credits_left", rep.CreditsLeft,
+		"alerts", len(rep.Deals), "messages", len(rep.Messages), "next_run", next.Format(time.RFC3339))
 	b.save(ctx, w, next)
 }
 
@@ -472,7 +476,7 @@ func nothingNew(id int64, h *state.History, rep engine.Report) string {
 func (b *Bot) save(ctx context.Context, w store.Watch, next time.Time) {
 	w.NextRun = next
 	if err := b.Store.SaveWatch(ctx, w); err != nil {
-		log.Printf("save watch %d: %v", w.ID, err)
+		slog.Error("save watch", "watch", w.ID, "err", err)
 	}
 }
 
@@ -485,7 +489,7 @@ func (b *Bot) setWizard(ctx context.Context, chatID int64, wz *wizard) {
 		data = string(raw)
 	}
 	if err := b.Store.SetWizard(ctx, chatID, data); err != nil {
-		log.Printf("save wizard of %d: %v", chatID, err)
+		slog.Error("save wizard", "chat", chatID, "err", err)
 	}
 }
 

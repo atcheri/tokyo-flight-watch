@@ -2,7 +2,7 @@ package bot
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -21,14 +21,14 @@ const offsetKey = "telegram_offset"
 func (b *Bot) Serve(ctx context.Context, p Poller) {
 	stored, err := b.Store.Meta(ctx, offsetKey)
 	if err != nil {
-		log.Printf("read telegram offset: %v", err)
+		slog.Error("read telegram offset", "err", err)
 	}
 	offset, _ := strconv.ParseInt(stored, 10, 64)
 	for ctx.Err() == nil {
 		updates, err := p.Updates(ctx, offset)
 		if err != nil {
 			if ctx.Err() == nil {
-				log.Printf("telegram updates: %v", err)
+				slog.Warn("telegram updates", "err", err)
 				sleep(ctx, 5*time.Second)
 			}
 			continue
@@ -37,7 +37,7 @@ func (b *Bot) Serve(ctx context.Context, p Poller) {
 			b.handleSafely(ctx, u)
 			offset = u.ID + 1
 			if err := b.Store.SetMeta(ctx, offsetKey, strconv.FormatInt(offset, 10)); err != nil {
-				log.Printf("save telegram offset: %v", err)
+				slog.Error("save telegram offset", "err", err)
 			}
 		}
 	}
@@ -46,7 +46,7 @@ func (b *Bot) Serve(ctx context.Context, p Poller) {
 func (b *Bot) handleSafely(ctx context.Context, u notify.Update) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("panic handling update %d: %v", u.ID, r)
+			slog.Error("panic handling update", "update", u.ID, "chat", u.ChatID, "panic", r)
 		}
 	}()
 	b.HandleUpdate(ctx, u)

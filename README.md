@@ -54,6 +54,7 @@ Un service Go unique : il reçoit les messages Telegram (long polling, donc ni d
    - `BOT_SECRET_KEY` : la clé de l'étape 2
    - `INVITE_CODE` : un code à partager avec vos proches
    - `MAX_WATCHES` (optionnel) : nombre de suivis par personne, 5 par défaut
+   - `LOG_FORMAT` (optionnel) : `text` (par défaut, lignes `clé=valeur`) ou `json` ; `LOG_LEVEL` : `debug`, `info` (par défaut), `warn` ou `error`
 5. Déployez. Les journaux doivent afficher `bot started`. Le volume `bot-data` conserve la base entre les déploiements.
 
 ### Utilisation

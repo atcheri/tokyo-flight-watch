@@ -10,7 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -29,6 +29,8 @@ const dateLayout = "2006-01-02"
 type Options struct {
 	ForceNotify  bool // send the alert message even without deals
 	ForceSummary bool // send the summary even if not due
+	// Log receives the run's logs, tagged by the caller (e.g. with the watch ID); slog.Default() if nil.
+	Log *slog.Logger
 }
 
 // Report is what a check produced. The caller sends the messages and saves the history.
@@ -78,6 +80,11 @@ func ScanCost(cfg *config.Config, today time.Time) int {
 // Run performs one check of the watch cfg, updating h.
 func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flightapi.Client, today time.Time, opts Options) (Report, error) {
 	rep := Report{CreditsLeft: -1}
+	lg := opts.Log
+	if lg == nil {
+		lg = slog.Default()
+	}
+	lg = lg.With("watch_name", cfg.Name)
 	startRequests := client.Requests
 	used := func() int { return client.Requests - startRequests }
 	todayStr := today.Format(dateLayout)
@@ -95,7 +102,7 @@ func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flig
 
 	credits, err := client.Credits(ctx)
 	if err != nil {
-		log.Printf("could not read remaining credits: %v", err)
+		lg.Warn("could not read remaining credits", "err", err)
 		credits = -1
 	}
 	if credits >= 0 && credits < scanCost {
@@ -108,7 +115,7 @@ func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flig
 		return rep, nil
 	}
 
-	scan, failed, apiNote := scanCalendar(ctx, client, cfg, ps, windows, today)
+	scan, failed, apiNote := scanCalendar(ctx, lg, client, cfg, ps, windows, today)
 	if failed == scanCost {
 		return rep, fmt.Errorf("all %d calendar requests failed", scanCost)
 	}
@@ -131,8 +138,8 @@ func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flig
 	}
 	for _, p := range ps {
 		best := rules.Cheapest(scan[p.kind])
-		log.Printf("%s %s: %d date pairs, best %d € on %s, median %d €",
-			cfg.Name, p.kind, len(scan[p.kind]), best.Price, best.Key, rules.Median(scan[p.kind]))
+		lg.Info("scan done", "kind", p.kind, "date_pairs", len(scan[p.kind]),
+			"best_eur", best.Price, "best_dates", best.Key, "median_eur", rules.Median(scan[p.kind]))
 	}
 
 	rules.ExpireAlerts(cfg, h, scan)
@@ -142,12 +149,12 @@ func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flig
 	}
 	for _, sig := range rules.Signals(cfg, h, scan, today) {
 		canDetail := used() < cfg.MaxRequestsPerRun && (credits < 0 || used() < credits)
-		row, err := dealRow(ctx, client, cfg, sig, filters[sig.Kind], canDetail)
+		row, err := dealRow(ctx, lg, client, cfg, sig, filters[sig.Kind], canDetail)
 		if err != nil {
-			log.Printf("%s: %v", sig.Best.Key, err)
+			lg.Error("build alert", "dates", sig.Best.Key, "err", err)
 			continue
 		}
-		log.Printf("%s alert %s: %d € on %s (%s)", cfg.Name, sig.Kind, row.Price, sig.Best.Key, row.Reasons)
+		lg.Info("alert", "kind", sig.Kind, "price_eur", row.Price, "dates", sig.Best.Key, "reasons", row.Reasons)
 		rules.RecordAlert(h, sig, todayStr)
 		rep.Deals = append(rep.Deals, row)
 	}
@@ -188,7 +195,7 @@ func Run(ctx context.Context, cfg *config.Config, h *state.History, client *flig
 
 // scanCalendar prices every wanted date pair for each pass. It returns the prices by
 // category, the number of failed requests and the last "no results" message of the API.
-func scanCalendar(ctx context.Context, client *flightapi.Client, cfg *config.Config, ps []pass,
+func scanCalendar(ctx context.Context, lg *slog.Logger, client *flightapi.Client, cfg *config.Config, ps []pass,
 	windows []schedule.Window, today time.Time) (scan rules.Scan, failed int, apiNote string) {
 	scan = rules.Scan{}
 	for _, p := range ps {
@@ -201,14 +208,15 @@ func scanCalendar(ctx context.Context, client *flightapi.Client, cfg *config.Con
 				OutboundStart: outStart, OutboundEnd: outEnd,
 				ReturnStart: retStart, ReturnEnd: retEnd,
 			})
+			reqLog := lg.With("kind", p.kind, "outbound", outStart+".."+outEnd, "return", retStart+".."+retEnd)
 			if errors.Is(err, flightapi.ErrNoResults) {
-				log.Printf("calendar %s %s..%s: %v", p.kind, outStart, outEnd, err)
+				reqLog.Warn("calendar request: no results", "err", err)
 				apiNote = strings.TrimPrefix(err.Error(), flightapi.ErrNoResults.Error()+": ")
 				continue
 			}
 			if err != nil {
 				failed++
-				log.Printf("calendar %s %s..%s: %v", p.kind, outStart, outEnd, err)
+				reqLog.Error("calendar request failed", "err", err)
 				continue
 			}
 			kept := 0
@@ -222,7 +230,7 @@ func scanCalendar(ctx context.Context, client *flightapi.Client, cfg *config.Con
 					prices[combo.Key()] = cp.Price
 				}
 			}
-			log.Printf("calendar %s %s..%s: %d price(s), %d kept", p.kind, outStart, outEnd, len(result), kept)
+			reqLog.Info("calendar request", "prices", len(result), "kept", kept)
 		}
 	}
 	return scan, failed, apiNote
@@ -239,7 +247,7 @@ var priceLevels = map[string]string{"low": "bas", "typical": "normal", "high": "
 
 // dealRow describes a signal. With detail, one detailed search with the same filters as the
 // calendar pass picks the actual offer; otherwise, or if it fails, the calendar price is reported.
-func dealRow(ctx context.Context, client *flightapi.Client, cfg *config.Config, sig rules.Signal,
+func dealRow(ctx context.Context, lg *slog.Logger, client *flightapi.Client, cfg *config.Config, sig rules.Signal,
 	filters flightapi.Filters, detail bool) (notify.DealRow, error) {
 	combo, err := comboFromKey(sig.Best.Key)
 	if err != nil {
@@ -268,7 +276,7 @@ func dealRow(ctx context.Context, client *flightapi.Client, cfg *config.Config, 
 	}
 	resp, err := client.Search(ctx, query)
 	if err != nil {
-		log.Printf("detail %s: %v", sig.Best.Key, err)
+		lg.Warn("detail search failed", "dates", sig.Best.Key, "err", err)
 		row.Note = "détails non vérifiés (la recherche détaillée a échoué)"
 		return row, nil
 	}

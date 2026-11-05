@@ -9,6 +9,8 @@ services:
       BOT_SECRET_KEY: ${BOT_SECRET_KEY:?set a key from `openssl rand -base64 32`}
       INVITE_CODE: ${INVITE_CODE:?set the invite code}
       MAX_WATCHES: ${MAX_WATCHES:-5}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       DATA_DIR: /data
     volumes:
       - bot-data:/data

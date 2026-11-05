@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"log"
+	"log/slog"
 	"strings"
 
 	"github.com/atch/tokyo-flight-watch/internal/config"
@@ -58,7 +58,7 @@ var prompts = map[string]string{
 func (b *Bot) startWizard(ctx context.Context, user store.User) {
 	ws, err := b.Store.Watches(ctx, user.ChatID)
 	if err != nil {
-		log.Printf("count watches of %d: %v", user.ChatID, err)
+		slog.Error("count watches", "chat", user.ChatID, "err", err)
 		b.reply(ctx, user.ChatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -241,7 +241,7 @@ func (b *Bot) recap(wz wizard) (text string, ok bool) {
 func (b *Bot) createWatch(ctx context.Context, chatID int64, wz wizard) {
 	data, err := wz.Draft.Marshal()
 	if err != nil {
-		log.Printf("marshal watch config: %v", err)
+		slog.Error("marshal watch config", "chat", chatID, "err", err)
 		b.reply(ctx, chatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
@@ -250,10 +250,13 @@ func (b *Bot) createWatch(ctx context.Context, chatID int64, wz wizard) {
 		ChatID: chatID, Config: string(data), EveryDays: wz.EveryDays, NextRun: now, CreatedAt: now,
 	})
 	if err != nil {
-		log.Printf("create watch for %d: %v", chatID, err)
+		slog.Error("create watch", "chat", chatID, "err", err)
 		b.reply(ctx, chatID, "⚠️ Erreur interne, réessayez plus tard.")
 		return
 	}
+	described := wz.Draft
+	_ = described.Validate() // parses the dates Describe prints; already validated at the recap
+	slog.Info("watch created", "watch", id, "chat", chatID, "config", described.Describe(), "every_days", wz.EveryDays)
 	b.reply(ctx, chatID, fmt.Sprintf("✅ Suivi n°%d créé. La première vérification a lieu dans quelques minutes ; "+
 		"je vous écris dès qu'un prix intéressant apparaît, et un résumé arrive après la première vérification.", id))
 }

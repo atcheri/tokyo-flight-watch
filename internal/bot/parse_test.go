@@ -20,6 +20,23 @@ func TestParseAirports(t *testing.T) {
 	if _, err := parseAirports("BER, OSL"); err != nil {
 		t.Errorf("BER and OSL are airports: %v", err)
 	}
+	if got, err := parseAirports("FRA CGN / dus"); err != nil || !reflect.DeepEqual(got, []string{"FRA", "CGN", "DUS"}) {
+		t.Errorf("spaces and slashes: %v, %v", got, err)
+	}
+	for in, want := range map[string]string{
+		"Paris":       "CDG", // a city name suggests its airports
+		"FRA, QQQ":    "« QQQ » n'est pas un code d'aéroport connu",
+		"New York":    "JFK",
+		"Düsseldorf":  "DUS – Düsseldorf Airport",
+		"Atlantis 42": "« Atlantis 42 » n'est pas un code d'aéroport à 3 lettres",
+	} {
+		if _, err := parseAirports(in); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: error %v, want it to contain %q", in, err, want)
+		}
+	}
+	if got := airportLines([]string{"HND"}); got != "✓ HND – Tokyo Haneda International Airport (Tokyo, JP)" {
+		t.Errorf("airportLines = %q", got)
+	}
 	for _, bad := range []string{"", "Frankfurt", "FR", "AAA BBB CCC DDD EEE FFF"} {
 		if _, err := parseAirports(bad); err == nil {
 			t.Errorf("%q: expected an error", bad)

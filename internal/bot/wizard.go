@@ -87,6 +87,7 @@ func (b *Bot) handleWizard(ctx context.Context, user store.User, u notify.Update
 		return
 	}
 
+	answered := wz.Step
 	next, err := b.advance(&wz, u.Text)
 	if err != nil {
 		b.reply(ctx, user.ChatID, "❌ "+html.EscapeString(err.Error())+"\n\n"+prompts[wz.Step])
@@ -110,7 +111,14 @@ func (b *Bot) handleWizard(ctx context.Context, user store.User, u notify.Update
 	default:
 		wz.Step = next
 		b.setWizard(ctx, user.ChatID, &wz)
-		b.reply(ctx, user.ChatID, prompts[next])
+		text := prompts[next]
+		switch answered { // echo the airport names so a wrong code is noticed at once
+		case stepOrigins:
+			text = html.EscapeString(airportLines(wz.Draft.Origins)) + "\n\n" + text
+		case stepDestinations:
+			text = html.EscapeString(airportLines(wz.Draft.Destinations)) + "\n\n" + text
+		}
+		b.reply(ctx, user.ChatID, text)
 	}
 }
 

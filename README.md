@@ -66,6 +66,12 @@ Un service Go unique : il reçoit les messages Telegram (long polling, donc ni d
 
 Chaque vérification coûte 1 à 3 requêtes par catégorie selon la largeur de la période, plus 1 par alerte. Avec la clé gratuite (100 requêtes au total), choisissez une période courte et une fréquence de quelques jours.
 
+### Liste des aéroports
+Les codes saisis sont vérifiés avec une copie des données [OurAirports](https://ourairports.com/data/) (domaine public), intégrée au programme : `internal/airports/airports.csv`, environ 9 000 aéroports. Le bot refuse les codes de ville (PAR, TYO…) et les codes inconnus, propose des aéroports quand on tape un nom de ville, et affiche le nom de chaque aéroport saisi. Pour mettre la liste à jour (quelques fois par an suffit), puis redéployer :
+```sh
+go generate ./internal/airports
+```
+
 ### En local
 ```sh
 TELEGRAM_BOT_TOKEN=... BOT_SECRET_KEY=$(openssl rand -base64 32) INVITE_CODE=test DATA_DIR=./data go run ./cmd/bot

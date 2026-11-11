@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atch/tokyo-flight-watch/internal/airports"
 )
 
 const dateLayout = "2006-01-02"
@@ -28,7 +30,7 @@ func isNo(s string) bool  { return nonWords[normalize(s)] }
 func isYes(s string) bool { return yesWords[normalize(s)] }
 
 // cityCodes are IATA metropolitan-area codes, which Google Flights does not price as airports,
-// with the airports to use instead.
+// with the airports to use instead. None of them is also an airport code.
 var cityCodes = map[string]string{
 	"PAR": "CDG, ORY", "LON": "LHR, LGW, STN, LTN, LCY", "TYO": "HND, NRT", "OSA": "KIX, ITM",
 	"NYC": "JFK, EWR, LGA", "MIL": "MXP, LIN, BGY", "ROM": "FCO, CIA", "STO": "ARN, BMA",
@@ -38,22 +40,35 @@ var cityCodes = map[string]string{
 	"JKT": "CGK, HLP", "SPK": "CTS",
 }
 
-// parseAirports reads 1 to 5 IATA codes separated by commas or spaces ("FRA, cgn DUS").
+// parseAirports reads 1 to 5 IATA airport codes separated by commas, spaces or slashes
+// ("FRA, cgn DUS"). City codes, unknown codes and city names are refused with suggestions.
 func parseAirports(s string) ([]string, error) {
-	fields := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '/' || r == ' ' })
 	var codes []string
 	seen := map[string]bool{}
-	for _, f := range fields {
-		if !airportRe.MatchString(f) {
-			return nil, fmt.Errorf("« %s » n'est pas un code d'aéroport à 3 lettres", f)
+	for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '/' }) {
+		words := strings.Fields(part)
+		if len(words) == 0 {
+			continue
 		}
-		code := strings.ToUpper(f)
-		if airports, ok := cityCodes[code]; ok {
-			return nil, fmt.Errorf("« %s » désigne une ville, pas un aéroport : indiquez plutôt %s", code, airports)
+		allCodes := true
+		for _, w := range words {
+			allCodes = allCodes && airportRe.MatchString(w)
 		}
-		if !seen[code] {
-			seen[code] = true
-			codes = append(codes, code)
+		if !allCodes {
+			return nil, unknownAirport(strings.Join(words, " "), "n'est pas un code d'aéroport à 3 lettres")
+		}
+		for _, w := range words {
+			code := strings.ToUpper(w)
+			if alternatives, ok := cityCodes[code]; ok {
+				return nil, fmt.Errorf("« %s » désigne une ville, pas un aéroport : indiquez plutôt %s", code, alternatives)
+			}
+			if _, ok := airports.Lookup(code); !ok {
+				return nil, unknownAirport(code, "n'est pas un code d'aéroport connu")
+			}
+			if !seen[code] {
+				seen[code] = true
+				codes = append(codes, code)
+			}
 		}
 	}
 	switch {
@@ -63,6 +78,32 @@ func parseAirports(s string) ([]string, error) {
 		return nil, errors.New("5 aéroports au maximum")
 	}
 	return codes, nil
+}
+
+// unknownAirport explains why text is refused and suggests airports whose city or name matches it.
+func unknownAirport(text, why string) error {
+	msg := fmt.Sprintf("« %s » %s", text, why)
+	found := airports.Search(text, 6)
+	if len(found) == 0 {
+		return errors.New(msg)
+	}
+	lines := make([]string, len(found))
+	for i, a := range found {
+		lines[i] = "• " + a.Label()
+	}
+	return fmt.Errorf("%s. Aéroports correspondants :\n%s", msg, strings.Join(lines, "\n"))
+}
+
+// airportLines describes codes with their airport names, one per line.
+func airportLines(codes []string) string {
+	lines := make([]string, len(codes))
+	for i, code := range codes {
+		lines[i] = "✓ " + code
+		if a, ok := airports.Lookup(code); ok {
+			lines[i] = "✓ " + a.Label()
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // window is a departure window, fixed (From/To) or relative (InMin/InMax days after the run).

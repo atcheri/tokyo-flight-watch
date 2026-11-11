@@ -106,16 +106,6 @@ func (r *Response) Itineraries() []Itinerary {
 	return append(append([]Itinerary{}, r.BestFlights...), r.OtherFlights...)
 }
 
-// SearchURL builds a Google Flights link for the query.
-func SearchURL(q Query) string {
-	text := fmt.Sprintf("Flights from %s to %s on %s through %s",
-		strings.Join(q.Origins, ","), strings.Join(q.Destinations, ","), q.OutboundDate, q.ReturnDate)
-	if q.MaxStops == 0 {
-		text += " nonstop"
-	}
-	return "https://www.google.com/travel/flights?hl=fr&curr=EUR&q=" + url.QueryEscape(text)
-}
-
 // Search returns the offers for one outbound/return date pair.
 func (c *Client) Search(ctx context.Context, q Query) (*Response, error) {
 	params := q.Filters.params("google_flights")

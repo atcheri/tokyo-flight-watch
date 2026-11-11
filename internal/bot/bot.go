@@ -287,7 +287,15 @@ func (b *Bot) describeWatch(w store.Watch) string {
 		html.EscapeString(cfg.Describe()), status)
 	if h, err := state.Decode([]byte(w.History)); err == nil && len(h.Days) > 0 {
 		last := h.Days[len(h.Days)-1]
-		text += fmt.Sprintf("\nMeilleur prix au %s : %d €", last.Date, last.BestAny.Price)
+		day := last.Date
+		if t, err := time.Parse(dateLayout, last.Date); err == nil {
+			day = t.Format("02.01.2006")
+		}
+		if last.BestAny.Price > 0 {
+			text += fmt.Sprintf("\nMeilleur prix au %s : %d €", day, last.BestAny.Price)
+		} else {
+			text += fmt.Sprintf("\nAucun prix trouvé à la vérification du %s", day)
+		}
 		if last.BestDir.Price > 0 {
 			text += fmt.Sprintf(" · direct %d €", last.BestDir.Price)
 		}
@@ -461,7 +469,9 @@ func nothingNew(id int64, h *state.History, rep engine.Report) string {
 	text := fmt.Sprintf("Suivi n°%d : pas de nouvelle bonne affaire.", id)
 	if n := len(h.Days); n > 0 {
 		last := h.Days[n-1]
-		text += fmt.Sprintf("\nMeilleur prix actuel : %d €", last.BestAny.Price)
+		if last.BestAny.Price > 0 {
+			text += fmt.Sprintf("\nMeilleur prix actuel : %d €", last.BestAny.Price)
+		}
 		if last.BestDir.Price > 0 {
 			text += fmt.Sprintf(" · direct %d €", last.BestDir.Price)
 		}

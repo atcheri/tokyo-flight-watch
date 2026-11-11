@@ -27,6 +27,17 @@ func normalize(s string) string {
 func isNo(s string) bool  { return nonWords[normalize(s)] }
 func isYes(s string) bool { return yesWords[normalize(s)] }
 
+// cityCodes are IATA metropolitan-area codes, which Google Flights does not price as airports,
+// with the airports to use instead.
+var cityCodes = map[string]string{
+	"PAR": "CDG, ORY", "LON": "LHR, LGW, STN, LTN, LCY", "TYO": "HND, NRT", "OSA": "KIX, ITM",
+	"NYC": "JFK, EWR, LGA", "MIL": "MXP, LIN, BGY", "ROM": "FCO, CIA", "STO": "ARN, BMA",
+	"MOW": "SVO, DME, VKO", "BJS": "PEK, PKX", "SEL": "ICN, GMP",
+	"WAS": "IAD, DCA, BWI", "CHI": "ORD, MDW", "YTO": "YYZ, YTZ", "YMQ": "YUL", "BUH": "OTP",
+	"SAO": "GRU, CGH, VCP", "RIO": "GIG, SDU", "BUE": "EZE, AEP", "REK": "KEF",
+	"JKT": "CGK, HLP", "SPK": "CTS",
+}
+
 // parseAirports reads 1 to 5 IATA codes separated by commas or spaces ("FRA, cgn DUS").
 func parseAirports(s string) ([]string, error) {
 	fields := strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '/' || r == ' ' })
@@ -37,6 +48,9 @@ func parseAirports(s string) ([]string, error) {
 			return nil, fmt.Errorf("« %s » n'est pas un code d'aéroport à 3 lettres", f)
 		}
 		code := strings.ToUpper(f)
+		if airports, ok := cityCodes[code]; ok {
+			return nil, fmt.Errorf("« %s » désigne une ville, pas un aéroport : indiquez plutôt %s", code, airports)
+		}
 		if !seen[code] {
 			seen[code] = true
 			codes = append(codes, code)

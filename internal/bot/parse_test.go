@@ -2,6 +2,7 @@ package bot
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,6 +13,12 @@ func TestParseAirports(t *testing.T) {
 	got, err := parseAirports("fra, CGN dus,FRA")
 	if err != nil || !reflect.DeepEqual(got, []string{"FRA", "CGN", "DUS"}) {
 		t.Fatalf("got %v, %v", got, err)
+	}
+	if _, err := parseAirports("FRA, par"); err == nil || !strings.Contains(err.Error(), "CDG, ORY") {
+		t.Errorf("city code PAR: %v", err)
+	}
+	if _, err := parseAirports("BER, OSL"); err != nil {
+		t.Errorf("BER and OSL are airports: %v", err)
 	}
 	for _, bad := range []string{"", "Frankfurt", "FR", "AAA BBB CCC DDD EEE FFF"} {
 		if _, err := parseAirports(bad); err == nil {
